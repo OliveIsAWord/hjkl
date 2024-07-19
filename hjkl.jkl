@@ -1,0 +1,49 @@
+#ASM [
+call Main
+]
+
+#INCLUDE "fox32rom.def.hjk"
+#INCLUDE "fox32os.def.hjk"
+
+window : Window
+
+FN Exit()
+    DestroyWindow(&window)
+    EndCurrentTask()
+END
+
+FN HandleMouseClick(IN x : UINT, IN y : UINT)
+    IF y < 16 THEN // User clicked the title bar
+        IF x < 8 THEN Exit() END // User clicked the close window button
+        // Otherwise, drag the window
+        StartDraggingWindow(&window) // NOTE: This blocks *all* tasks, including ours, until the user releases the mouse click
+    ELSE
+        yy : UINT = 0
+        WHILE yy < 16 DO
+            xx : UINT = 0
+            WHILE xx < 16 DO
+                backgroundColor : ULONG = 0xFF202020
+                IF (xx $ yy) & 1 THEN
+                    backgroundColor = 0xFF404040
+                END
+                DrawFontTileToOverlay(yy * 16 + xx, xx * 8, yy * 16 + 16, 0xFFFFFFFF, backgroundColor, window.Overlay)
+                xx += 1
+            END
+        yy += 1
+        END
+    DrawStrToOverlay("Hello, Jackal!", 160, 50, 0xFFFFFFFF, 0xFF000000, window.Overlay)
+    END
+END
+
+FN Main()
+    NewWindow(&window, "My Window", 320, 400, 160, 40, 0, 0)
+    FillWindow(&window, 0xFF996644)
+    WHILE TRUE DO
+        YieldTask()
+        ev : Event
+        GetNextWindowEvent(&window, &ev)
+        IF ev.Type == EVENT_TYPE_MOUSE_CLICK THEN
+            HandleMouseClick(ev.Body.Pos.X, ev.Body.Pos.Y)
+        END
+    END
+END

@@ -1,0 +1,112 @@
+// task
+
+EXTERN FN YieldTask()
+
+EXTERN FN EndCurrentTask()
+
+
+
+// memory
+
+EXTERN FN AllocateMemory (
+    IN size : UWORD,
+) : ^VOID
+
+EXTERN FN FreeMemory (
+    IN ptr : ^VOID,
+)
+
+EXTERN FN HeapUsage () : UWORD
+
+
+
+// window
+
+STRUCT Window
+    FrameBuffer : ^ULONG,
+    EventQueue : ^VOID,
+    EventQueueBottom : ^VOID,
+    Title : ^UBYTE,
+    Width : UINT,
+    Height : UINT,
+    X : UINT,
+    Y : UINT,
+    Overlay : UBYTE,
+    _Reserved1 : UBYTE,
+    Flags : UINT,
+    MenuBar : ^VOID,
+    FirstWidget : ^VOID,
+    ActiveWidget : ^VOID,
+END
+
+STRUCT Position
+    X : ULONG,
+    Y : ULONG,
+END
+
+UNION EventBody
+    Pos : Position,
+    Parameters : ULONG[7],
+END
+
+STRUCT Event
+    Type : ULONG,
+    Body : EventBody,
+END
+
+EXTERN FN NewWindow (
+    IN window : ^Window,
+    IN title : ^UBYTE,
+    IN width : UINT,
+    IN height : UINT,
+    IN x : UINT,
+    IN y : UINT,
+    IN menu_bar : ^VOID,
+    IN first_widget : ^VOID,
+)
+
+EXTERN FN DestroyWindow (
+    IN window : ^Window,
+)
+
+EXTERN FN GetNextWindowEvent (
+    IN window : ^Window,
+    IN event : ^Event,
+)
+
+EXTERN FN FillWindow (
+    IN window : ^Window,
+    IN color : ULONG,
+)
+
+EXTERN FN StartDraggingWindow (
+    IN window : ^Window,
+)
+
+
+
+// vfs
+
+STRUCT PACKED File
+    Disk : UBYTE,
+    FirstSector : UINT,
+    SEEK_OFFSET : ULONG,
+    SystemType : UBYTE,
+    _Reserved : ULONG[6],
+END
+
+EXTERN FN Open (
+    IN file_name : ^UBYTE,
+    IN disk_id : UBYTE,
+    IN file : ^File,
+) : ^UBYTE
+
+EXTERN FN Read (
+    IN file : ^File,
+    IN buf : ^UBYTE,
+    IN count : UWORD,
+)
+
+EXTERN FN GetSize (
+    IN file : ^File,
+) : UWORD
