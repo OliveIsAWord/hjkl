@@ -1,15 +1,131 @@
 #ASM [
+pop a0 // streamPtr
+pop a1 // arg0
+pop a2 // arg1
+pop a3 // arg2
+// arg3 is now on the top of stack
 call Main
 ]
+
+// Hey, this comment is getting a little long, don't you think?
 
 #INCLUDE "fox32rom.def.hjk"
 #INCLUDE "fox32os.def.hjk"
 
+STRUCT FileLocation
+    Disk : UBYTE,
+    Name : ^UBYTE,
+END
+
+stream : ^File
+file_loc : FileLocation
 window : Window
+window_title := "Hjkl - *:********.***"
+text_buffer : ^UBYTE = NULLPTR
+currentRow : WORD = 0
+cursorX : UBYTE = 0
+cursorY : UBYTE = 0
+
+// Bitbee
+// palette_fg := 0xFF4AABCF
+// palette_bg := 0xFF302B29
+// Paper palette
+palette_fg := 0xFF3E3E3E
+palette_bg := 0xFFC1E7F6
+
+small_digits : UINT[16] = {
+    075557,
+    026227,
+    061247,
+    061616,
+    055711,
+    074716,
+    034757,
+    071122,
+    075757,
+    075711,
+    025755,
+    065656,
+    034443,
+    065556,
+    074647,
+    074644,
+}
 
 FN Exit()
-    DestroyWindow(&window)
+    IF window.FrameBuffer THEN
+        DestroyWindow(&window)
+    END
+    IF text_buffer THEN
+        FreeMemory(text_buffer)
+    END
     EndCurrentTask()
+END
+
+FN Print (
+    IN str : ^UBYTE,
+)
+    len := StringLength(str)
+    Write(stream, str, len)
+END
+
+FN PrintUWord (
+    IN x : UWORD,
+)
+    digit := 1
+    WHILE digit <= x DO
+        old_digit := digit
+        digit *= 10
+        IF old_digit > digit THEN
+            digit = old_digit
+            BREAK
+        END
+    END
+    IF digit > 1 THEN
+        digit /= 10
+    END
+    WHILE digit DO
+        d := x / digit
+        c := "0123456789" + d
+        Write(stream, c, 1)
+        x -= d * digit
+        digit /= 10
+    END
+END
+
+FN PrintNewline()
+    Write(stream, "\n", 1)
+END
+
+FN Println(
+    IN str : ^UBYTE,
+)
+    len := StringLength(str)
+    Write(stream, str, len)
+    PrintNewline()
+END
+
+FN Hex (
+    IN n : UWORD,
+)
+    i : WORD = 28
+    WHILE i >= 0 DO
+        x := (n >> i) & 0xF
+        c := "0123456789ABCDEF" + x
+        Write(stream, c, 1)
+        i -= 4
+    END
+END
+
+FN ParseFilePath(
+    IN fp : ^UBYTE,
+    IN loc : ^FileLocation,
+)
+    IF fp[0] >= '0' AND fp[0] <= '9' AND fp[1] == ':' THEN
+        loc^.Disk = fp[0] - '0'
+        fp += 2
+    END
+    loc^.Name = fp
 END
 
 FN HandleMouseClick(IN x : UINT, IN y : UINT)
@@ -17,27 +133,138 @@ FN HandleMouseClick(IN x : UINT, IN y : UINT)
         IF x < 8 THEN Exit() END // User clicked the close window button
         // Otherwise, drag the window
         StartDraggingWindow(&window) // NOTE: This blocks *all* tasks, including ours, until the user releases the mouse click
-    ELSE
-        yy : UINT = 0
-        WHILE yy < 16 DO
-            xx : UINT = 0
-            WHILE xx < 16 DO
-                backgroundColor : ULONG = 0xFF202020
-                IF (xx $ yy) & 1 THEN
-                    backgroundColor = 0xFF404040
-                END
-                DrawFontTileToOverlay(yy * 16 + xx, xx * 8, yy * 16 + 16, 0xFFFFFFFF, backgroundColor, window.Overlay)
-                xx += 1
-            END
-        yy += 1
-        END
-    DrawStrToOverlay("Hello, Jackal!", 160, 50, 0xFFFFFFFF, 0xFF000000, window.Overlay)
+        LEAVE
     END
 END
 
-FN Main()
-    NewWindow(&window, "My Window", 320, 400, 160, 40, 0, 0)
-    FillWindow(&window, 0xFF996644)
+FN DrawPixel (
+    IN x : UINT,
+    IN y : UINT,
+    IN agh : ULONG,
+)
+    xx := &window.FrameBuffer[window.Width * y + x]
+    xx^ = agh
+END
+
+FN DrawReplacementTile (
+    IN c : UBYTE,
+    IN x : UINT,
+    IN y : UINT,
+    IN fg_color : ULONG,
+    IN bg_color : ULONG,
+)
+    i := 1
+    WHILE i < 8 DO
+        DrawPixel(x + i, y, bg_color)
+        DrawPixel(x + i, y + 1, fg_color)
+        DrawPixel(x + i, y + 2, bg_color)
+        DrawPixel(x + i, y + 8, bg_color)
+        DrawPixel(x + i, y + 14, bg_color)
+        DrawPixel(x + i, y + 15, fg_color)
+        i += 1
+    END
+    i = 0
+    WHILE i < 16 DO
+        DrawPixel(x, y + i, bg_color)
+        i += 1
+    END
+    i = 2
+    WHILE i < 15 DO
+        DrawPixel(x + 1, y + i, fg_color)
+        DrawPixel(x + 2, y + i, bg_color)
+        DrawPixel(x + 6, y + i, bg_color)
+        DrawPixel(x + 7, y + i, fg_color)
+        i += 1
+    END
+    i = 0
+    WHILE i <= 1 DO
+        half := (c >> (i * 4)) & 0xF
+        bit_image := small_digits[half]
+        dy := 0
+        WHILE dy < 5 DO
+            dx := 0
+            WHILE dx < 3 DO
+                bit_color := bg_color
+                IF (bit_image >> (14 - dy * 3 - dx)) & 1 THEN
+                    bit_color = fg_color
+                END
+                DrawPixel(x + 3 + dx, y + 9 + dy - i * 6, bit_color)
+                dx += 1
+            END
+            dy += 1
+        END
+        i += 1
+    END
+END
+    
+
+FN Main(
+    IN stream_ : ^File,
+    IN arg0 : ^UBYTE,
+    IN arg1 : ^UBYTE,
+    IN arg2 : ^UBYTE,
+    IN arg3 : ^UBYTE,
+)
+    stream = stream_
+    window.FrameBuffer = NULLPTR
+    IF NOT arg0 OR arg1 | arg2 | arg3 THEN
+        Println("Usage: hjkl <file>")
+        EndCurrentTask()
+    END
+    file_loc.Disk = GetCurrentDiskId()
+    ParseFilePath(arg0, &file_loc)
+    current_disk_id : UBYTE = 1
+    file : File
+    IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
+        Print("Could not find file ")
+        Println(file_loc.Name)
+        EndCurrentTask()
+    END
+    size := GetSize(&file)
+    Print("opened ")
+    PrintUWord(file_loc.Disk)
+    Print(":")
+    Print(file_loc.Name)
+    Print(" of ")
+    PrintUWord(size)
+    Println(" bytes")
+    text_buffer = AllocateMemory(size)
+    Read(&file, text_buffer, size)
+    window_title[7] = '0' + file_loc.Disk
+    ii := 0
+    WHILE TRUE DO
+        window_title[ii + 9] = file_loc.Name[ii]
+        IF file_loc.Name[ii] == 0 THEN BREAK END
+        ii += 1
+    END
+    NewWindow(&window, window_title, 32 * 8, 400, 160, 40, 0, 0)
+    FillWindow(&window, palette_bg)
+    i := 0
+    x := 0
+    y := 16
+    WHILE i < size DO
+        c := text_buffer[i]
+        i += 1
+        IF c == 0x0a THEN
+            x = 0
+            y += 16
+            IF y > window.Height THEN
+                BREAK
+            END
+        ELSEIF c < 0x20 OR c > 0x7E THEN
+            DrawReplacementTile(c, x, y, palette_fg, palette_bg)
+        ELSE
+            DrawFontTileToOverlay(c, x, y, palette_fg, palette_bg, window.Overlay)
+        END
+        x += 8
+        IF x + 8 > window.Width THEN
+            x = 0
+            y += 16
+            IF y > window.Height THEN
+                BREAK
+            END
+        END
+    END
     WHILE TRUE DO
         YieldTask()
         ev : Event

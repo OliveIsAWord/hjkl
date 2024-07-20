@@ -64,6 +64,12 @@ get_resource:              jmp [0x00000F10]
 
 // implementations
 
+GetCurrentDiskId:
+.global GetCurrentDiskId
+    call get_current_disk_id
+    mov a3, r0
+    ret
+
 YieldTask:
 .global YieldTask
     push s0
@@ -115,7 +121,7 @@ AllocateMemory:
 .global AllocateMemory
     mov r0, a0
     call allocate_memory
-    mov a0, r0
+    mov a3, r0
     ret
 
 FreeMemory:
@@ -126,7 +132,7 @@ FreeMemory:
 HeapUsage:
 .global HeapUsage
     call heap_usage
-    mov a0, r0
+    mov a3, r0
     ret
 
 
@@ -176,10 +182,10 @@ StartDraggingWindow:
 Open:
 .global Open
     mov r0, a0
-    movz.8 r1, a1
+    mov r1, a1
     mov r2, a2
     call open
-    mov a0, r0
+    mov a3, r0
     ret
 
 Read:
@@ -190,9 +196,18 @@ Read:
     mov r2, a1
     jmp read
 
+Write:
+.global Write
+    // we switched argument order
+    mov r0, a2
+    mov r1, a0
+    mov r2, a1
+    jmp write
+
 GetSize:
 .global GetSize
     mov r0, a0
     call get_size
-    mov a0, r0
+    mov a3, r0
+    ret
 ]

@@ -1,3 +1,9 @@
+// system
+
+EXTERN FN GetCurrentDiskId() : UBYTE
+
+
+
 // task
 
 EXTERN FN YieldTask()
@@ -90,18 +96,35 @@ EXTERN FN StartDraggingWindow (
 STRUCT PACKED File
     Disk : UBYTE,
     FirstSector : UINT,
-    SEEK_OFFSET : ULONG,
-    SystemType : UBYTE,
+    SeekOffset : ULONG,
+    Type : UBYTE,
     _Reserved : ULONG[6],
+END
+
+STRUCT PACKED _Stream
+    _Reserved1 : UBYTE,
+    _Reserved2 : UINT,
+    SeekOffset : ULONG,
+    Type : UBYTE,
+    ReadCall : ^VOID,
+    WriteCall : ^VOID,
+    Size : UWORD,
+    _Reserved : ULONG[3]
 END
 
 EXTERN FN Open (
     IN file_name : ^UBYTE,
-    IN disk_id : UBYTE,
+    IN disk_id : ULONG,
     IN file : ^File,
-) : ^UBYTE
+) : ULONG
 
 EXTERN FN Read (
+    IN file : ^File,
+    IN buf : ^UBYTE,
+    IN count : UWORD,
+)
+
+EXTERN FN Write (
     IN file : ^File,
     IN buf : ^UBYTE,
     IN count : UWORD,
