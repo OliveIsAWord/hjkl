@@ -1,0 +1,103 @@
+#INCLUDE "array_list.hjk"
+
+STRUCT Piece
+    Start : ULONG, // HSB is 0 for original, 1 for add
+    Length : ULONG,
+END
+
+ArrayListOf (
+    Piece,
+    ArrayListPiece,
+    ArrayListPieceWithCapacity,
+    ArrayListPieceNew,
+    ArrayListPieceFree,
+    ArrayListPieceGrow,
+    ArrayListPieceReserveOne,
+)
+
+STRUCT PieceTable
+    Original : ^UBYTE,
+    Add : ArrayListUbyte,
+    Pieces : ArrayListPiece,
+END
+
+FN PieceTableInit (
+    IN original : ^UBYTE,
+    IN length : UWORD,
+    IN table : ^PieceTable,
+)
+    table^.Original = original
+    ArrayListUbyteNew(&table^.Add)
+    ArrayListPieceWithCapacity(1, &table^.Pieces)
+    table^.Pieces.Length = 1
+    table^.Pieces.Elems^.Start = 0
+    table^.Pieces.Elems^.Length = length
+END
+
+FN PieceTableFree(IN table : ^PieceTable)
+    IF table^.Original THEN
+        // FreeMemory(table^.Original)
+    END
+    ArrayListUbyteFree(&table^.Add)
+    ArrayListPieceFree(&table^.Pieces)
+END
+
+// Given a byte index, returns the index of the piece containing that byte and the byte offset within that piece
+FN PieceTableSeek(IN self : ^PieceTable, IN seek_to : UWORD, OUT offset : UWORD) : WORD
+    i := 0
+    seek_at := 0
+    WHILE i < self^.Pieces.Length DO
+        len := self^.Pieces.Elems[i].Length
+        IF seek_at + len > seek_to THEN
+            offset = seek_to - seek_at
+            RETURN i
+        END
+        seek_at += len
+        i += 1
+    END
+    Assert(0, "out of bounds", seek_to, i)
+END
+
+FN PieceTableAt(
+    IN self : ^PieceTable,
+    IN piece_index : UWORD,
+    IN byte_offset : UWORD,
+) : UBYTE
+    piece := &self^.Pieces.Elems[piece_index]
+    start := piece^.Start
+    buffer : ^UBYTE
+    IF start & 0x80000000 THEN
+        buffer = self^.Add.Elems + (start - 0x80000000)
+    ELSE
+        buffer = self^.Original + start
+    END
+    RETURN buffer[byte_offset]
+END
+
+STRUCT PieceTableIterator
+    Table : ^PieceTable,
+    PieceIndex : WORD,
+    ByteOffset : UWORD,
+END
+
+FN PieceTableIteratorNew(IN table : ^PieceTable, IN seek_to : UWORD, IN iter : ^PieceTableIterator)
+    byte_offset : UWORD
+    piece_index := PieceTableSeek(table, seek_to, OUT byte_offset)
+    iter^.Table = table
+    iter^.PieceIndex = piece_index
+    iter^.ByteOffset = byte_offset
+END
+
+FN PieceTableIteratorSeekPosition(
+    IN self : ^PieceTableIterator,
+    IN x : UBYTE,
+    IN y : UBYTE,
+    IN width : UBYTE,
+    OUT offset : UWORD,
+) : UWORD
+    IF self^.PieceIndex == -1 THEN
+        RETURN -1
+    END
+    
+    self^.Table^.Pieces.Elems[self^.PieceIndex]
+END

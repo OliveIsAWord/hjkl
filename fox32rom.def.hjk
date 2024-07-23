@@ -39,7 +39,7 @@ EXTERN FN MenuUpdateEvent(
     IN hoveringItem: UWORD,
 )
 
-EXTERN FN CopyMemory(
+EXTERN FN CopyMemoryBytes(
     IN source: ^VOID,
     IN destination: ^VOID,
     IN length: UWORD,
@@ -80,3 +80,7 @@ EXTERN FN IsRamDiskFormatted(): UBYTE
 #DEFINE KEY_LSHIFT  0x2A
 #DEFINE KEY_RSHIFT  0x36
 #DEFINE KEY_CAPS    0x3A
+#DEFINE KEY_UP      0x67
+#DEFINE KEY_LEFT    0x69
+#DEFINE KEY_RIGHT   0x6A
+#DEFINE KEY_DOWN    0x6C

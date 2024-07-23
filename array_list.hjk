@@ -1,0 +1,96 @@
+#INCLUDE "fox32os.def.hjk"
+#INCLUDE "fox32rom.def.hjk"
+
+EXTERN FN Assert (
+    IN condition : UBYTE,
+    IN label : ^UBYTE,
+    IN arg1 : UWORD,
+    IN arg2 : UWORD,
+)
+
+STRUCT AllocationHeader
+    Size : UWORD,
+    _Prev : ^VOID,
+    _Next : ^VOID,
+END
+
+#MACRO ArrayListOf (
+    T,
+    ArrayListT,
+    ArrayListTWithCapacity,
+    ArrayListTNew,
+    ArrayListTFree,
+    ArrayListTGrow,
+    ArrayListTReserveOne,
+) [
+
+STRUCT ArrayListT
+    Capacity : UWORD, // allocation size in elements
+    Length : UWORD, // number of elements in the list
+    Elems : ^T, // pointer to array of elements
+END
+
+FN ArrayListTWithCapacity(IN cap : UWORD, IN list : ^ArrayListT)
+    IF cap == 0 THEN
+        list^.Capacity = 0
+        list^.Length = 0
+        list^.Elems = NULLPTR
+        LEAVE
+    END
+    bytes := cap * SIZEOF T
+    ptr := AllocateMemory(bytes)
+    list^.Elems = ptr
+    list^.Length = 0
+    IF NOT ptr THEN
+        Assert(0, "out of memory", 0, 0)
+    ELSE
+        header : ^AllocationHeader = ptr - SIZEOF AllocationHeader
+        // actual_capacity := header^.Size / SIZEOF T - SIZEOF AllocationHeader
+        // Assert(cap == actual_capacity, "requested vs. actual capacity", cap, actual_capacity)
+        list^.Capacity = cap
+    END
+    LEAVE
+END
+
+FN ArrayListTNew(IN list : ^ArrayListT)
+    ArrayListTWithCapacity(0, list)
+END
+
+FN ArrayListTFree(IN list : ^ArrayListT)
+    IF list^.Elems THEN
+        FreeMemory(list^.Elems)
+    END
+END
+
+FN ArrayListTGrow(IN list : ^ArrayListT)
+    new_list : ArrayListT
+    new_capacity := list^.Capacity / 2 * 3 + 8
+    ArrayListTWithCapacity(new_capacity, &new_list)
+    IF list^.Length THEN
+        CopyMemoryBytes(list^.Elems, new_list.Elems, list^.Length * SIZEOF T)
+    END
+    ArrayListTFree(list)
+    list^.Capacity = new_list.Capacity
+    list^.Elems = new_list.Elems
+END
+
+FN ArrayListTReserveOne(IN list : ^ArrayListT) : ^T
+    IF list^.Length >= list^.Capacity THEN
+        ArrayListTGrow(list)
+    END
+    ptr := list^.Elems + list^.Length * SIZEOF T
+    list^.Length += 1
+    RETURN ptr
+END
+
+]
+
+ArrayListOf (
+    UBYTE,
+    ArrayListUbyte,
+    ArrayListUbyteWithCapacity,
+    ArrayListUbyteNew,
+    ArrayListUbyteFree,
+    ArrayListUbyteGrow,
+    ArrayListUbyteReserveOne,
+)

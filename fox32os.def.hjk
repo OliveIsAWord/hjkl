@@ -14,10 +14,12 @@ EXTERN FN EndCurrentTask()
 
 // memory
 
+/// Allocate `size` bytes of memory, or NULLPTR if there is not sufficient memory. `size` must not be 0.
 EXTERN FN AllocateMemory (
     IN size : UWORD,
 ) : ^VOID
 
+// Free an allocation returned by `AllocateMemory`. `ptr` must not be NULLPTR.
 EXTERN FN FreeMemory (
     IN ptr : ^VOID,
 )
@@ -53,6 +55,7 @@ END
 UNION EventBody
     Pos : Position,
     Parameters : ULONG[7],
+    Scancode : UBYTE,
 END
 
 STRUCT Event

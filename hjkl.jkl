@@ -11,6 +11,8 @@ call Main
 
 #INCLUDE "fox32rom.def.hjk"
 #INCLUDE "fox32os.def.hjk"
+// #INCLUDE "array_list.hjk"
+#INCLUDE "piece_table.jkl"
 
 STRUCT FileLocation
     Disk : UBYTE,
@@ -20,18 +22,20 @@ END
 stream : ^File
 file_loc : FileLocation
 window : Window
-window_title := "Hjkl - *:********.***"
-text_buffer : ^UBYTE = NULLPTR
-currentRow : WORD = 0
-cursorX : UBYTE = 0
-cursorY : UBYTE = 0
+window_title := "Hjkl - 0:12345678.123"
+table : PieceTable
+view_byte_offset : UWORD = 0
+cursor_x : UBYTE = 0
+cursor_y : UBYTE = 0
+width : UBYTE = 32
+height : UBYTE = 20
 
 // Bitbee
-// palette_fg := 0xFF4AABCF
-// palette_bg := 0xFF302B29
+// palette_fg : ULONG = 0xFF302B29
+// palette_bg : ULONG = 0xFF4AABCF
 // Paper palette
-palette_fg := 0xFF3E3E3E
-palette_bg := 0xFFC1E7F6
+palette_fg : ULONG = 0xFF3E3E3E
+palette_bg : ULONG = 0xFFC1E7F6
 
 small_digits : UINT[16] = {
     075557,
@@ -52,13 +56,11 @@ small_digits : UINT[16] = {
     074644,
 }
 
-FN Exit()
+FN Exit ()
     IF window.FrameBuffer THEN
         DestroyWindow(&window)
     END
-    IF text_buffer THEN
-        FreeMemory(text_buffer)
-    END
+    PieceTableFree(&table)
     EndCurrentTask()
 END
 
@@ -69,7 +71,7 @@ FN Print (
     Write(stream, str, len)
 END
 
-FN PrintUWord (
+FN PrintUword (
     IN x : UWORD,
 )
     digit := 1
@@ -93,11 +95,11 @@ FN PrintUWord (
     END
 END
 
-FN PrintNewline()
+FN PrintNewline ()
     Write(stream, "\n", 1)
 END
 
-FN Println(
+FN Println (
     IN str : ^UBYTE,
 )
     len := StringLength(str)
@@ -117,7 +119,25 @@ FN Hex (
     END
 END
 
-FN ParseFilePath(
+FN Assert (
+    IN condition : UBYTE,
+    IN label : ^UBYTE,
+    IN arg1 : UWORD,
+    IN arg2 : UWORD,
+)
+    IF condition THEN LEAVE END
+    Print("Assertion error: ")
+    Println(label)
+    Print("Arg1: ")
+    PrintUword(arg1)
+    PrintNewline()
+    Print("Arg2: ")
+    PrintUword(arg2)
+    PrintNewline()
+    Exit()
+END
+
+FN ParseFilePath (
     IN fp : ^UBYTE,
     IN loc : ^FileLocation,
 )
@@ -128,13 +148,35 @@ FN ParseFilePath(
     loc^.Name = fp
 END
 
-FN HandleMouseClick(IN x : UINT, IN y : UINT)
+FN HandleMouseClick (
+    IN x : UINT,
+    IN y : UINT,
+)
     IF y < 16 THEN // User clicked the title bar
         IF x < 8 THEN Exit() END // User clicked the close window button
         // Otherwise, drag the window
         StartDraggingWindow(&window) // NOTE: This blocks *all* tasks, including ours, until the user releases the mouse click
         LEAVE
     END
+END
+
+FN HandleKeyDown (
+    IN scancode : UBYTE,
+)
+    IF scancode == KEY_UP THEN
+        cursor_y -= 1
+    ELSEIF scancode == KEY_DOWN THEN
+        cursor_y += 1
+    ELSEIF scancode == KEY_LEFT THEN
+        cursor_x -= 1
+    ELSEIF scancode == KEY_RIGHT THEN
+        cursor_x += 1
+    END
+END
+
+FN HandleKeyUp (
+    IN scancode : UBYTE,
+)
 END
 
 FN DrawPixel (
@@ -196,24 +238,99 @@ FN DrawReplacementTile (
         i += 1
     END
 END
-    
 
-FN Main(
+FN DrawTextBuffer ()
+    inner_offset : UWORD
+    i := PieceTableSeek(&table, view_byte_offset, OUT inner_offset)
+    x := 0
+    y := 0
+    WHILE TRUE DO
+        piece := &table.Pieces.Elems[i]
+        start := piece^.Start
+        buffer : ^UBYTE
+        IF start & 0x80000000 THEN
+            start -= 0x80000000
+            buffer = table.Add.Elems
+        ELSE
+            buffer = table.Original
+        END
+        c := buffer[start + inner_offset]
+        is_cursor := x == cursor_x AND y == cursor_y
+        display_x := (x + 1) * 8
+        display_y := (y + 1) * 16
+        IF c == 0x0a THEN // newline
+            IF is_cursor THEN
+                DrawFontTileToOverlay(0x8a, display_x, display_y, palette_fg, 0, window.Overlay)
+            END
+            x = 0
+            y += 1
+            IF y >= height THEN
+                BREAK
+            END
+        ELSE
+            color1 := palette_fg
+            color2 := palette_bg
+            IF is_cursor THEN
+                temp := color1
+                color1 = color2
+                color2 = temp
+            END
+            IF c < 0x20 OR c > 0x7E THEN // unprintable character
+                DrawReplacementTile(c, display_x, display_y, color1, color2)
+            ELSE // printable character
+                DrawFontTileToOverlay(c, display_x, display_y, color1, color2, window.Overlay)
+            END
+            x += 1
+            IF x >= width THEN
+                x = 0
+                y += 1
+                IF y >= height THEN
+                    BREAK
+                END
+            END
+        END
+        inner_offset += 1
+        IF inner_offset >= piece^.Length THEN
+            inner_offset = 0
+            i += 1
+            IF i >= table.Pieces.Length THEN
+                BREAK
+            END
+        END
+    END
+END
+
+EXTERN FN Millis () : UWORD
+#ASM [
+Millis:
+.global Millis
+    in a3, 0x80000706
+    ret
+]
+
+FN PreMain (
+    IN stream_ : ^File,
+)
+    stream = stream_
+    file_loc.Name = NULLPTR
+    window.FrameBuffer = NULLPTR
+    PieceTableInit(NULLPTR, 0, &table)
+END
+    
+FN Main (
     IN stream_ : ^File,
     IN arg0 : ^UBYTE,
     IN arg1 : ^UBYTE,
     IN arg2 : ^UBYTE,
     IN arg3 : ^UBYTE,
 )
-    stream = stream_
-    window.FrameBuffer = NULLPTR
+    PreMain(stream_)
     IF NOT arg0 OR arg1 | arg2 | arg3 THEN
         Println("Usage: hjkl <file>")
-        EndCurrentTask()
+        Exit()
     END
     file_loc.Disk = GetCurrentDiskId()
     ParseFilePath(arg0, &file_loc)
-    current_disk_id : UBYTE = 1
     file : File
     IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
         Print("Could not find file ")
@@ -222,55 +339,51 @@ FN Main(
     END
     size := GetSize(&file)
     Print("opened ")
-    PrintUWord(file_loc.Disk)
+    PrintUword(file_loc.Disk)
     Print(":")
     Print(file_loc.Name)
     Print(" of ")
-    PrintUWord(size)
+    PrintUword(size)
     Println(" bytes")
-    text_buffer = AllocateMemory(size)
+    text_buffer : ^UBYTE = AllocateMemory(size)
+    IF NOT text_buffer THEN
+        Println("oops! oom")
+        Exit()
+    END
     Read(&file, text_buffer, size)
-    window_title[7] = '0' + file_loc.Disk
-    ii := 0
-    WHILE TRUE DO
-        window_title[ii + 9] = file_loc.Name[ii]
-        IF file_loc.Name[ii] == 0 THEN BREAK END
-        ii += 1
+    FreeMemory(text_buffer)
+    PieceTableFree(&table)
+    PieceTableInit(text_buffer, size, &table)
+    
+    // create window title
+    IF TRUE THEN
+        window_title[7] = '0' + file_loc.Disk
+        i := 0
+        WHILE TRUE DO
+            window_title[i + 9] = file_loc.Name[i]
+            IF file_loc.Name[i] == 0 THEN BREAK END
+            i += 1
+        END
     END
-    NewWindow(&window, window_title, 32 * 8, 400, 160, 40, 0, 0)
+
+    Print(window_title) Print(" ")
+    PrintUword(width) Print("x")
+    PrintUword(height) PrintNewline()
+    
+    NewWindow(&window, window_title, (width + 1) * 8, (height + 2) * 16, 160, 20, 0, 0)
     FillWindow(&window, palette_bg)
-    i := 0
-    x := 0
-    y := 16
-    WHILE i < size DO
-        c := text_buffer[i]
-        i += 1
-        IF c == 0x0a THEN
-            x = 0
-            y += 16
-            IF y > window.Height THEN
-                BREAK
-            END
-        ELSEIF c < 0x20 OR c > 0x7E THEN
-            DrawReplacementTile(c, x, y, palette_fg, palette_bg)
-        ELSE
-            DrawFontTileToOverlay(c, x, y, palette_fg, palette_bg, window.Overlay)
-        END
-        x += 8
-        IF x + 8 > window.Width THEN
-            x = 0
-            y += 16
-            IF y > window.Height THEN
-                BREAK
-            END
-        END
-    END
+    
     WHILE TRUE DO
+        DrawTextBuffer()
         YieldTask()
         ev : Event
         GetNextWindowEvent(&window, &ev)
         IF ev.Type == EVENT_TYPE_MOUSE_CLICK THEN
             HandleMouseClick(ev.Body.Pos.X, ev.Body.Pos.Y)
+        ELSEIF ev.Type == EVENT_TYPE_KEY_DOWN THEN
+            HandleKeyDown(ev.Body.Scancode)
+        ELSEIF ev.Type == EVENT_TYPE_KEY_UP THEN
+            HandleKeyUp(ev.Body.Scancode)
         END
     END
 END

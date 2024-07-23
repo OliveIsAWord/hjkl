@@ -109,8 +109,8 @@ IsRamDiskFormatted:
     ifnz movz.8 a3, 0
     ret
 
-CopyMemory:
-.global CopyMemory
+CopyMemoryBytes:
+.global CopyMemoryBytes
     mov r0, a0
     mov r1, a1
     mov r2, a2
