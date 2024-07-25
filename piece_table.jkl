@@ -13,6 +13,7 @@ ArrayListOf (
     ArrayListPieceFree,
     ArrayListPieceGrow,
     ArrayListPieceReserveOne,
+    ArrayListPieceReserveAt,
 )
 
 STRUCT PieceTable
@@ -72,6 +73,21 @@ FN PieceTableAt(
         buffer = self^.Original + start
     END
     RETURN buffer[byte_offset]
+END
+
+FN PieceTableInsert (
+    IN self : ^PieceTable,
+    IN position : UWORD,
+    IN char : UBYTE,
+)
+    offset : UWORD
+    piece := PieceTableSeek(self, position, OUT offset)
+    Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
+    Assert(piece >= 0, "todo: insert at end of file", CAST piece TO UWORD, position)
+    new_piece := ArrayListPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
+    new_piece^.Start = self^.Add.Length | 0x80000000
+    new_piece^.Length = 1
+    ArrayListUbyteReserveOne(&self^.Add)^ = char
 END
 
 STRUCT PieceTableIterator

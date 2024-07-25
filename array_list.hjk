@@ -22,6 +22,7 @@ END
     ArrayListTFree,
     ArrayListTGrow,
     ArrayListTReserveOne,
+    ArrayListTReserveAt,
 ) [
 
 STRUCT ArrayListT
@@ -62,9 +63,18 @@ FN ArrayListTFree(IN list : ^ArrayListT)
     END
 END
 
-FN ArrayListTGrow(IN list : ^ArrayListT)
+FN ArrayListTGrow (
+    IN list : ^ArrayListT,
+    IN necessary_capacity : UWORD
+)
+    IF list^.Capacity >= necessary_capacity THEN
+        LEAVE
+    END
     new_list : ArrayListT
     new_capacity := list^.Capacity / 2 * 3 + 8
+    IF new_capacity < necessary_capacity THEN
+        new_capacity = necessary_capacity
+    END
     ArrayListTWithCapacity(new_capacity, &new_list)
     IF list^.Length THEN
         CopyMemoryBytes(list^.Elems, new_list.Elems, list^.Length * SIZEOF T)
@@ -76,13 +86,30 @@ END
 
 FN ArrayListTReserveOne(IN list : ^ArrayListT) : ^T
     IF list^.Length >= list^.Capacity THEN
-        ArrayListTGrow(list)
+        ArrayListTGrow(list, list^.Length + 1)
     END
     ptr := list^.Elems + list^.Length * SIZEOF T
     list^.Length += 1
     RETURN ptr
 END
 
+FN ArrayListTReserveAt(
+    IN self : ^ArrayListT,
+    IN index : UWORD, // the position to insert new elements
+    IN additional : UWORD, // how many elements to insert
+) : ^T
+    new_length := self^.Length + additional
+    IF new_length > self^.Capacity THEN
+        ArrayListTGrow(self, new_length)
+    END
+    i := self^.Length
+    WHILE i >= index + 1 DO
+        i -= 1
+        CopyMemoryBytes(&self^.Elems[i], &self^.Elems[i + additional], SIZEOF T)
+    END
+    self^.Length = new_length
+    RETURN &self^.Elems[index]
+END
 ]
 
 ArrayListOf (
@@ -93,4 +120,5 @@ ArrayListOf (
     ArrayListUbyteFree,
     ArrayListUbyteGrow,
     ArrayListUbyteReserveOne,
+    ArrayListUbyteReserveAt,
 )

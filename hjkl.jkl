@@ -19,23 +19,29 @@ STRUCT FileLocation
     Name : ^UBYTE,
 END
 
-stream : ^File
-file_loc : FileLocation
-window : Window
-window_title := "Hjkl - 0:12345678.123"
-table : PieceTable
-view_byte_offset : UWORD = 0
-cursor_x : UBYTE = 0
-cursor_y : UBYTE = 0
-width : UBYTE = 32
-height : UBYTE = 20
+stream : ^File = NULLPTR // stdin and stdout
+file_loc : FileLocation // the disk id and name of the opened file
+window : Window // our gui window
+window_title := "Hjkl - 0:12345678.123" // text displayed at the title bar
+table : PieceTable // text data
+view_byte_offset : UWORD = 0 // start of text view
+cursor : UWORD = 0 // cursor position within file in bytes
+cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
+width : UBYTE = 32 // number of columns in the text buffer
+height : UBYTE = 20 // number of rows in the text buffer
+redraw : UBYTE = TRUE // redraw the text buffer?
 
 // Bitbee
 // palette_fg : ULONG = 0xFF302B29
 // palette_bg : ULONG = 0xFF4AABCF
 // Paper palette
-palette_fg : ULONG = 0xFF3E3E3E
-palette_bg : ULONG = 0xFFC1E7F6
+color_fg : ULONG = 0xFF3E3E3E
+color_bg : ULONG = 0xFFC1E7F6
+// color_gutter : ULONG = 0xFF242018
+color_gutter : ULONG = 0xFFF0F8FF
+// color_ultradark : ULONG = 0xFF242018
+
+#DEFINE BOTTOM_BAR 0
 
 small_digits : UINT[16] = {
     075557,
@@ -164,13 +170,25 @@ FN HandleKeyDown (
     IN scancode : UBYTE,
 )
     IF scancode == KEY_UP THEN
-        cursor_y -= 1
+        // cursor_y -= 1
     ELSEIF scancode == KEY_DOWN THEN
-        cursor_y += 1
+        // cursor_y += 1
     ELSEIF scancode == KEY_LEFT THEN
-        cursor_x -= 1
+        cursor -= 1
     ELSEIF scancode == KEY_RIGHT THEN
-        cursor_x += 1
+        cursor += 1
+    ELSEIF
+        // TODO: Support keypad?
+        0x02 <= scancode AND scancode <= 0x0D
+     OR 0x10 <= scancode AND scancode <= 0x1C // notably, we include the Enter key in this range
+     OR 0x1E <= scancode AND scancode <= 0x29
+     OR 0x2B <= scancode AND scancode <= 0x35
+     OR scancode == 0x39
+    THEN
+        c := ScancodeToAscii(scancode)
+        PieceTableInsert(&table, cursor, c)
+        cursor += 1
+        redraw = TRUE
     END
 END
 
@@ -240,10 +258,21 @@ FN DrawReplacementTile (
 END
 
 FN DrawTextBuffer ()
+    IF redraw THEN
+        redraw = FALSE
+        FillWindow(&window, color_bg)
+    END
+    gutter_y := 0
+    WHILE gutter_y < height DO
+        DrawFontTileToOverlay(' ', 0, gutter_y * 16 + 16, 0, color_gutter, window.Overlay)
+        DrawFontTileToOverlay(' ', (width + 1) * 8, gutter_y * 16 + 16, 0, color_gutter, window.Overlay)
+        gutter_y += 1
+    END
     inner_offset : UWORD
     i := PieceTableSeek(&table, view_byte_offset, OUT inner_offset)
     x := 0
     y := 0
+    bytes_until_cursor := cursor - view_byte_offset
     WHILE TRUE DO
         piece := &table.Pieces.Elems[i]
         start := piece^.Start
@@ -255,26 +284,22 @@ FN DrawTextBuffer ()
             buffer = table.Original
         END
         c := buffer[start + inner_offset]
-        is_cursor := x == cursor_x AND y == cursor_y
+        color1 := color_fg
+        color2 := color_bg
+        IF bytes_until_cursor == 0 THEN
+            color1 = color_bg
+            color2 = color_fg
+        END
         display_x := (x + 1) * 8
         display_y := (y + 1) * 16
         IF c == 0x0a THEN // newline
-            IF is_cursor THEN
-                DrawFontTileToOverlay(0x8a, display_x, display_y, palette_fg, 0, window.Overlay)
-            END
+            DrawFontTileToOverlay(' ', display_x, display_y, color1, color2, window.Overlay)
             x = 0
             y += 1
             IF y >= height THEN
                 BREAK
             END
         ELSE
-            color1 := palette_fg
-            color2 := palette_bg
-            IF is_cursor THEN
-                temp := color1
-                color1 = color2
-                color2 = temp
-            END
             IF c < 0x20 OR c > 0x7E THEN // unprintable character
                 DrawReplacementTile(c, display_x, display_y, color1, color2)
             ELSE // printable character
@@ -289,6 +314,7 @@ FN DrawTextBuffer ()
                 END
             END
         END
+        bytes_until_cursor -= 1
         inner_offset += 1
         IF inner_offset >= piece^.Length THEN
             inner_offset = 0
@@ -296,6 +322,13 @@ FN DrawTextBuffer ()
             IF i >= table.Pieces.Length THEN
                 BREAK
             END
+        END
+    END
+    IF BOTTOM_BAR THEN
+        bar_x := 0
+        WHILE bar_x < width + 2 DO
+            DrawFontTileToOverlay(' ', bar_x * 8, y * 16 + 16, 0, color_gutter, window.Overlay)
+            bar_x += 1
         END
     END
 END
@@ -370,10 +403,11 @@ FN Main (
     PrintUword(width) Print("x")
     PrintUword(height) PrintNewline()
     
-    NewWindow(&window, window_title, (width + 1) * 8, (height + 2) * 16, 160, 20, 0, 0)
-    FillWindow(&window, palette_bg)
+    NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, 0, 0)
+    FillWindow(&window, color_bg)
     
     WHILE TRUE DO
+        YieldTask()
         DrawTextBuffer()
         YieldTask()
         ev : Event
