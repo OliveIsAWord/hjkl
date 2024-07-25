@@ -1,50 +1,56 @@
-#INCLUDE "array_list.hjk"
+#INCLUDE "vec.hjk"
 
 STRUCT Piece
     Start : ULONG, // HSB is 0 for original, 1 for add
     Length : ULONG,
 END
 
-ArrayListOf (
+VecOf (
     Piece,
-    ArrayListPiece,
-    ArrayListPieceWithCapacity,
-    ArrayListPieceNew,
-    ArrayListPieceFree,
-    ArrayListPieceGrow,
-    ArrayListPieceReserveOne,
-    ArrayListPieceReserveAt,
+    VecPiece,
+    VecPieceWithCapacity,
+    VecPieceNew,
+    VecPieceFree,
+    VecPieceGrow,
+    VecPieceReserveOne,
+    VecPieceReserveAt,
 )
 
-STRUCT PieceTable
+STRUCT Pt
     Original : ^UBYTE,
-    Add : ArrayListUbyte,
-    Pieces : ArrayListPiece,
+    Add : VecUbyte,
+    Pieces : VecPiece,
 END
 
-FN PieceTableInit (
+FN PtInit (
     IN original : ^UBYTE,
     IN length : UWORD,
-    IN table : ^PieceTable,
+    IN table : ^Pt,
 )
     table^.Original = original
-    ArrayListUbyteNew(&table^.Add)
-    ArrayListPieceWithCapacity(1, &table^.Pieces)
+    VecUbyteNew(&table^.Add)
+    VecPieceWithCapacity(1, &table^.Pieces)
     table^.Pieces.Length = 1
     table^.Pieces.Elems^.Start = 0
     table^.Pieces.Elems^.Length = length
 END
 
-FN PieceTableFree(IN table : ^PieceTable)
+FN PtFree (
+    IN table : ^Pt,
+)
     IF table^.Original THEN
         // FreeMemory(table^.Original)
     END
-    ArrayListUbyteFree(&table^.Add)
-    ArrayListPieceFree(&table^.Pieces)
+    VecUbyteFree(&table^.Add)
+    VecPieceFree(&table^.Pieces)
 END
 
 // Given a byte index, returns the index of the piece containing that byte and the byte offset within that piece
-FN PieceTableSeek(IN self : ^PieceTable, IN seek_to : UWORD, OUT offset : UWORD) : WORD
+FN PtSeek (
+    IN self : ^Pt,
+    IN seek_to : UWORD,
+    OUT offset : UWORD,
+) : WORD
     i := 0
     seek_at := 0
     WHILE i < self^.Pieces.Length DO
@@ -59,8 +65,8 @@ FN PieceTableSeek(IN self : ^PieceTable, IN seek_to : UWORD, OUT offset : UWORD)
     Assert(0, "out of bounds", seek_to, i)
 END
 
-FN PieceTableAt(
-    IN self : ^PieceTable,
+FN PtAt (
+    IN self : ^Pt,
     IN piece_index : UWORD,
     IN byte_offset : UWORD,
 ) : UBYTE
@@ -75,37 +81,41 @@ FN PieceTableAt(
     RETURN buffer[byte_offset]
 END
 
-FN PieceTableInsert (
-    IN self : ^PieceTable,
+FN PtInsert (
+    IN self : ^Pt,
     IN position : UWORD,
     IN char : UBYTE,
 )
     offset : UWORD
-    piece := PieceTableSeek(self, position, OUT offset)
+    piece := PtSeek(self, position, OUT offset)
     Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
     Assert(piece >= 0, "todo: insert at end of file", CAST piece TO UWORD, position)
-    new_piece := ArrayListPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
+    new_piece := VecPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
     new_piece^.Start = self^.Add.Length | 0x80000000
     new_piece^.Length = 1
-    ArrayListUbyteReserveOne(&self^.Add)^ = char
+    VecUbyteReserveOne(&self^.Add)^ = char
 END
 
-STRUCT PieceTableIterator
-    Table : ^PieceTable,
+STRUCT PtIterator
+    Table : ^Pt,
     PieceIndex : WORD,
     ByteOffset : UWORD,
 END
 
-FN PieceTableIteratorNew(IN table : ^PieceTable, IN seek_to : UWORD, IN iter : ^PieceTableIterator)
+FN PtIteratorNew (
+    IN table : ^Pt,
+    IN seek_to : UWORD,
+    IN iter : ^PtIterator,
+)
     byte_offset : UWORD
-    piece_index := PieceTableSeek(table, seek_to, OUT byte_offset)
+    piece_index := PtSeek(table, seek_to, OUT byte_offset)
     iter^.Table = table
     iter^.PieceIndex = piece_index
     iter^.ByteOffset = byte_offset
 END
 
-FN PieceTableIteratorSeekPosition(
-    IN self : ^PieceTableIterator,
+FN PtIteratorSeekPosition(
+    IN self : ^PtIterator,
     IN x : UBYTE,
     IN y : UBYTE,
     IN width : UBYTE,

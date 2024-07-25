@@ -9,10 +9,9 @@ call Main
 
 // Hey, this comment is getting a little long, don't you think?
 
-#INCLUDE "fox32rom.def.hjk"
-#INCLUDE "fox32os.def.hjk"
-// #INCLUDE "array_list.hjk"
-#INCLUDE "piece_table.jkl"
+#INCLUDE "rom.hjk"
+#INCLUDE "os.hjk"
+#INCLUDE "pt.jkl"
 
 STRUCT FileLocation
     Disk : UBYTE,
@@ -23,10 +22,10 @@ stream : ^File = NULLPTR // stdin and stdout
 file_loc : FileLocation // the disk id and name of the opened file
 window : Window // our gui window
 window_title := "Hjkl - 0:12345678.123" // text displayed at the title bar
-table : PieceTable // text data
+table : Pt // text data
 view_byte_offset : UWORD = 0 // start of text view
 cursor : UWORD = 0 // cursor position within file in bytes
-cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
+// cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
 width : UBYTE = 32 // number of columns in the text buffer
 height : UBYTE = 20 // number of rows in the text buffer
 redraw : UBYTE = TRUE // redraw the text buffer?
@@ -66,7 +65,7 @@ FN Exit ()
     IF window.FrameBuffer THEN
         DestroyWindow(&window)
     END
-    PieceTableFree(&table)
+    PtFree(&table)
     EndCurrentTask()
 END
 
@@ -186,7 +185,7 @@ FN HandleKeyDown (
      OR scancode == 0x39
     THEN
         c := ScancodeToAscii(scancode)
-        PieceTableInsert(&table, cursor, c)
+        PtInsert(&table, cursor, c)
         cursor += 1
         redraw = TRUE
     END
@@ -269,7 +268,7 @@ FN DrawTextBuffer ()
         gutter_y += 1
     END
     inner_offset : UWORD
-    i := PieceTableSeek(&table, view_byte_offset, OUT inner_offset)
+    i := PtSeek(&table, view_byte_offset, OUT inner_offset)
     x := 0
     y := 0
     bytes_until_cursor := cursor - view_byte_offset
@@ -347,7 +346,7 @@ FN PreMain (
     stream = stream_
     file_loc.Name = NULLPTR
     window.FrameBuffer = NULLPTR
-    PieceTableInit(NULLPTR, 0, &table)
+    PtInit(NULLPTR, 0, &table)
 END
     
 FN Main (
@@ -385,8 +384,8 @@ FN Main (
     END
     Read(&file, text_buffer, size)
     FreeMemory(text_buffer)
-    PieceTableFree(&table)
-    PieceTableInit(text_buffer, size, &table)
+    PtFree(&table)
+    PtInit(text_buffer, size, &table)
     
     // create window title
     IF TRUE THEN

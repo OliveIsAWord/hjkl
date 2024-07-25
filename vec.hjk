@@ -1,5 +1,5 @@
-#INCLUDE "fox32os.def.hjk"
-#INCLUDE "fox32rom.def.hjk"
+#INCLUDE "os.hjk"
+#INCLUDE "rom.hjk"
 
 EXTERN FN Assert (
     IN condition : UBYTE,
@@ -14,24 +14,27 @@ STRUCT AllocationHeader
     _Next : ^VOID,
 END
 
-#MACRO ArrayListOf (
+#MACRO VecOf (
     T,
-    ArrayListT,
-    ArrayListTWithCapacity,
-    ArrayListTNew,
-    ArrayListTFree,
-    ArrayListTGrow,
-    ArrayListTReserveOne,
-    ArrayListTReserveAt,
+    VecT,
+    VecTWithCapacity,
+    VecTNew,
+    VecTFree,
+    VecTGrow,
+    VecTReserveOne,
+    VecTReserveAt,
 ) [
 
-STRUCT ArrayListT
+STRUCT VecT
     Capacity : UWORD, // allocation size in elements
     Length : UWORD, // number of elements in the list
     Elems : ^T, // pointer to array of elements
 END
 
-FN ArrayListTWithCapacity(IN cap : UWORD, IN list : ^ArrayListT)
+FN VecTWithCapacity (
+    IN cap : UWORD,
+    IN list : ^VecT
+)
     IF cap == 0 THEN
         list^.Capacity = 0
         list^.Length = 0
@@ -53,54 +56,60 @@ FN ArrayListTWithCapacity(IN cap : UWORD, IN list : ^ArrayListT)
     LEAVE
 END
 
-FN ArrayListTNew(IN list : ^ArrayListT)
-    ArrayListTWithCapacity(0, list)
+FN VecTNew (
+    IN list : ^VecT,
+)
+    VecTWithCapacity(0, list)
 END
 
-FN ArrayListTFree(IN list : ^ArrayListT)
+FN VecTFree (
+    IN list : ^VecT,
+)
     IF list^.Elems THEN
         FreeMemory(list^.Elems)
     END
 END
 
-FN ArrayListTGrow (
-    IN list : ^ArrayListT,
-    IN necessary_capacity : UWORD
+FN VecTGrow (
+    IN list : ^VecT,
+    IN necessary_capacity : UWORD,
 )
     IF list^.Capacity >= necessary_capacity THEN
         LEAVE
     END
-    new_list : ArrayListT
+    new_list : VecT
     new_capacity := list^.Capacity / 2 * 3 + 8
     IF new_capacity < necessary_capacity THEN
         new_capacity = necessary_capacity
     END
-    ArrayListTWithCapacity(new_capacity, &new_list)
+    VecTWithCapacity(new_capacity, &new_list)
     IF list^.Length THEN
         CopyMemoryBytes(list^.Elems, new_list.Elems, list^.Length * SIZEOF T)
     END
-    ArrayListTFree(list)
+    VecTFree(list)
     list^.Capacity = new_list.Capacity
     list^.Elems = new_list.Elems
 END
 
-FN ArrayListTReserveOne(IN list : ^ArrayListT) : ^T
+FN VecTReserveOne (
+    IN list : ^VecT,
+) : ^T
     IF list^.Length >= list^.Capacity THEN
-        ArrayListTGrow(list, list^.Length + 1)
+        VecTGrow(list, list^.Length + 1)
     END
     ptr := list^.Elems + list^.Length * SIZEOF T
     list^.Length += 1
     RETURN ptr
 END
 
-FN ArrayListTReserveAt(
-    IN self : ^ArrayListT,
+FN VecTReserveAt (
+    IN self : ^VecT,
     IN index : UWORD, // the position to insert new elements
     IN additional : UWORD, // how many elements to insert
 ) : ^T
     new_length := self^.Length + additional
     IF new_length > self^.Capacity THEN
-        ArrayListTGrow(self, new_length)
+        VecTGrow(self, new_length)
     END
     i := self^.Length
     WHILE i >= index + 1 DO
@@ -112,13 +121,13 @@ FN ArrayListTReserveAt(
 END
 ]
 
-ArrayListOf (
+VecOf (
     UBYTE,
-    ArrayListUbyte,
-    ArrayListUbyteWithCapacity,
-    ArrayListUbyteNew,
-    ArrayListUbyteFree,
-    ArrayListUbyteGrow,
-    ArrayListUbyteReserveOne,
-    ArrayListUbyteReserveAt,
+    VecUbyte,
+    VecUbyteWithCapacity,
+    VecUbyteNew,
+    VecUbyteFree,
+    VecUbyteGrow,
+    VecUbyteReserveOne,
+    VecUbyteReserveAt,
 )
