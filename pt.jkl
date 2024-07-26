@@ -39,7 +39,7 @@ FN PtFree (
     IN table : ^Pt,
 )
     IF table^.Original THEN
-        // FreeMemory(table^.Original)
+        FreeMemory(table^.Original)
     END
     VecUbyteFree(&table^.Add)
     VecPieceFree(&table^.Pieces)

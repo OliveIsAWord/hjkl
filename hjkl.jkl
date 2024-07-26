@@ -383,7 +383,6 @@ FN Main (
         Exit()
     END
     Read(&file, text_buffer, size)
-    FreeMemory(text_buffer)
     PtFree(&table)
     PtInit(text_buffer, size, &table)
     
