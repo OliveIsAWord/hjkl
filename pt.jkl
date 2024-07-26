@@ -1,7 +1,9 @@
 #INCLUDE "vec.hjk"
 
+#DEFINE BUFFER_OVERALLOC 0
+
 STRUCT Piece
-    Start : ULONG, // HSB is 0 for original, 1 for add
+    Start : ULONG,
     Length : ULONG,
 END
 
@@ -9,43 +11,51 @@ VecOf (
     Piece,
     VecPiece,
     VecPieceWithCapacity,
-    VecPieceNew,
+    VecPieceNull,
     VecPieceFree,
     VecPieceGrow,
     VecPieceReserveOne,
     VecPieceReserveAt,
 )
 
+// The piece table, a simple text data structure suited for efficient, arbitrary edits across a file.
 STRUCT Pt
-    Original : ^UBYTE,
-    Add : VecUbyte,
-    Pieces : VecPiece,
+    Data : VecUbyte, // Append-only array of all characters added to the text buffer.
+    Pieces : VecPiece, // Spans of `Data` that make up the current text buffer.
 END
 
-FN PtInit (
-    IN original : ^UBYTE,
-    IN length : UWORD,
+// Construct an empty piece table.
+FN PtNull (
     IN table : ^Pt,
 )
-    table^.Original = original
-    VecUbyteNew(&table^.Add)
+    VecUbyteNull(&table^.Data)
+    VecPieceNull(&table^.Pieces)
+END
+
+// Construct and initialize a piece table from a file.
+FN PtInit (
+    IN file : ^File,
+    IN table : ^Pt,
+)
+    length := GetSize(file)
+    VecUbyteWithCapacity(length + BUFFER_OVERALLOC, &table^.Data)
+    Read(file, table^.Data.Elems, length)
+    table^.Data.Length = length
     VecPieceWithCapacity(1, &table^.Pieces)
     table^.Pieces.Length = 1
     table^.Pieces.Elems^.Start = 0
     table^.Pieces.Elems^.Length = length
 END
 
+// Free a piece table.
 FN PtFree (
-    IN table : ^Pt,
+    IN self : ^Pt,
 )
-    IF table^.Original THEN
-        FreeMemory(table^.Original)
-    END
-    VecUbyteFree(&table^.Add)
-    VecPieceFree(&table^.Pieces)
+    VecUbyteFree(&self^.Data)
+    VecPieceFree(&self^.Pieces)
 END
 
-// Given a byte index, returns the index of the piece containing that byte and the byte offset within that piece
+// Given a byte index, return the index of the piece containing that byte and the byte offset within that piece.
 FN PtSeek (
     IN self : ^Pt,
     IN seek_to : UWORD,
@@ -63,24 +73,20 @@ FN PtSeek (
         i += 1
     END
     Assert(0, "out of bounds", seek_to, i)
+    // RETURN -1
 END
 
+// Given a piece index and byte offset within that piece, return the byte at that position.
 FN PtAt (
     IN self : ^Pt,
     IN piece_index : UWORD,
     IN byte_offset : UWORD,
 ) : UBYTE
-    piece := &self^.Pieces.Elems[piece_index]
-    start := piece^.Start
-    buffer : ^UBYTE
-    IF start & 0x80000000 THEN
-        buffer = self^.Add.Elems + (start - 0x80000000)
-    ELSE
-        buffer = self^.Original + start
-    END
-    RETURN buffer[byte_offset]
+    start := &self^.Pieces.Elems[piece_index].Start
+    RETURN self^.Data.Elems[start + byte_offset]
 END
 
+// Insert a new character at some byte offset.
 FN PtInsert (
     IN self : ^Pt,
     IN position : UWORD,
@@ -91,39 +97,7 @@ FN PtInsert (
     Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
     Assert(piece >= 0, "todo: insert at end of file", CAST piece TO UWORD, position)
     new_piece := VecPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
-    new_piece^.Start = self^.Add.Length | 0x80000000
+    new_piece^.Start = self^.Data.Length
     new_piece^.Length = 1
-    VecUbyteReserveOne(&self^.Add)^ = char
-END
-
-STRUCT PtIterator
-    Table : ^Pt,
-    PieceIndex : WORD,
-    ByteOffset : UWORD,
-END
-
-FN PtIteratorNew (
-    IN table : ^Pt,
-    IN seek_to : UWORD,
-    IN iter : ^PtIterator,
-)
-    byte_offset : UWORD
-    piece_index := PtSeek(table, seek_to, OUT byte_offset)
-    iter^.Table = table
-    iter^.PieceIndex = piece_index
-    iter^.ByteOffset = byte_offset
-END
-
-FN PtIteratorSeekPosition(
-    IN self : ^PtIterator,
-    IN x : UBYTE,
-    IN y : UBYTE,
-    IN width : UBYTE,
-    OUT offset : UWORD,
-) : UWORD
-    IF self^.PieceIndex == -1 THEN
-        RETURN -1
-    END
-    
-    self^.Table^.Pieces.Elems[self^.PieceIndex]
+    VecUbyteReserveOne(&self^.Data)^ = char
 END

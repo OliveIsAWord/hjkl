@@ -1,0 +1,4 @@
+Loc - Location.
+Null - As the name of a method (e.g. VecTNull), a "null" constructor whose return value need not be freed.
+Pt - Piece table, our text buffer data structure of choice.
+Vec - Vector, a dynamically resizeable array.

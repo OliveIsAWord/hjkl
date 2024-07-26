@@ -8,109 +8,97 @@ EXTERN FN Assert (
     IN arg2 : UWORD,
 )
 
-STRUCT AllocationHeader
-    Size : UWORD,
-    _Prev : ^VOID,
-    _Next : ^VOID,
-END
-
+// Given an inner type, generate a vector type and methods.
 #MACRO VecOf (
     T,
     VecT,
     VecTWithCapacity,
-    VecTNew,
+    VecTNull,
     VecTFree,
     VecTGrow,
     VecTReserveOne,
     VecTReserveAt,
 ) [
 
+// A vector, i.e. a growable array.
 STRUCT VecT
-    Capacity : UWORD, // allocation size in elements
-    Length : UWORD, // number of elements in the list
     Elems : ^T, // pointer to array of elements
+    Length : UWORD, // number of elements in the list
+    Capacity : UWORD, // allocation size in elements
 END
 
+// Construct and initialize a vector that can hold at least `cap` elements without reallocating.
 FN VecTWithCapacity (
     IN cap : UWORD,
-    IN list : ^VecT
+    IN vec : ^VecT,
 )
+    vec^.Length = 0
+    vec^.Capacity = cap
     IF cap == 0 THEN
-        list^.Capacity = 0
-        list^.Length = 0
-        list^.Elems = NULLPTR
-        LEAVE
-    END
-    bytes := cap * SIZEOF T
-    ptr := AllocateMemory(bytes)
-    list^.Elems = ptr
-    list^.Length = 0
-    IF NOT ptr THEN
-        Assert(0, "out of memory", 0, 0)
+        vec^.Elems = NULLPTR
     ELSE
-        header : ^AllocationHeader = ptr - SIZEOF AllocationHeader
-        // actual_capacity := header^.Size / SIZEOF T - SIZEOF AllocationHeader
-        // Assert(cap == actual_capacity, "requested vs. actual capacity", cap, actual_capacity)
-        list^.Capacity = cap
+        bytes := cap * SIZEOF T
+        ptr := AllocateMemory(bytes)
+        Assert(CAST ptr TO UWORD, "out of memory", cap, bytes)
+        vec^.Elems = ptr
     END
-    LEAVE
 END
 
-FN VecTNew (
-    IN list : ^VecT,
+// Construct an empty vector.
+FN VecTNull (
+    IN vec : ^VecT,
 )
-    VecTWithCapacity(0, list)
+    VecTWithCapacity(0, vec)
 END
 
+// Free a vector.
 FN VecTFree (
-    IN list : ^VecT,
+    IN self : ^VecT,
 )
-    IF list^.Elems THEN
-        FreeMemory(list^.Elems)
+    IF self^.Elems THEN
+        FreeMemory(self^.Elems)
     END
 END
 
+// Assure the vector has the capacity to store a given number of total elements.
 FN VecTGrow (
-    IN list : ^VecT,
+    IN self : ^VecT,
     IN necessary_capacity : UWORD,
 )
-    IF list^.Capacity >= necessary_capacity THEN
+    IF self^.Capacity >= necessary_capacity THEN
         LEAVE
     END
-    new_list : VecT
-    new_capacity := list^.Capacity / 2 * 3 + 8
+    new_vec : VecT
+    new_capacity := self^.Capacity / 2 * 3 + 8
     IF new_capacity < necessary_capacity THEN
         new_capacity = necessary_capacity
     END
-    VecTWithCapacity(new_capacity, &new_list)
-    IF list^.Length THEN
-        CopyMemoryBytes(list^.Elems, new_list.Elems, list^.Length * SIZEOF T)
+    VecTWithCapacity(new_capacity, &new_vec)
+    IF self^.Length THEN
+        CopyMemoryBytes(self^.Elems, new_vec.Elems, self^.Length * SIZEOF T)
     END
-    VecTFree(list)
-    list^.Capacity = new_list.Capacity
-    list^.Elems = new_list.Elems
+    VecTFree(self)
+    self^.Capacity = new_vec.Capacity
+    self^.Elems = new_vec.Elems
 END
 
+// Insert a new element at the end of the vector, returning a pointer to the uninitialized element.
 FN VecTReserveOne (
-    IN list : ^VecT,
+    IN self : ^VecT,
 ) : ^T
-    IF list^.Length >= list^.Capacity THEN
-        VecTGrow(list, list^.Length + 1)
-    END
-    ptr := list^.Elems + list^.Length * SIZEOF T
-    list^.Length += 1
-    RETURN ptr
+    VecTGrow(self, self^.Length + 1)
+    self^.Length += 1
+    RETURN &self^.Elems[self^.Length - 1]
 END
 
+// Insert `additional` new elements in the vector at position `index`, such that the new elements have indices [index, index + additional).
 FN VecTReserveAt (
     IN self : ^VecT,
-    IN index : UWORD, // the position to insert new elements
-    IN additional : UWORD, // how many elements to insert
+    IN index : UWORD,
+    IN additional : UWORD,
 ) : ^T
     new_length := self^.Length + additional
-    IF new_length > self^.Capacity THEN
-        VecTGrow(self, new_length)
-    END
+    VecTGrow(self, new_length)
     i := self^.Length
     WHILE i >= index + 1 DO
         i -= 1
@@ -125,7 +113,7 @@ VecOf (
     UBYTE,
     VecUbyte,
     VecUbyteWithCapacity,
-    VecUbyteNew,
+    VecUbyteNull,
     VecUbyteFree,
     VecUbyteGrow,
     VecUbyteReserveOne,

@@ -36,7 +36,6 @@ redraw : UBYTE = TRUE // redraw the text buffer?
 // Paper palette
 color_fg : ULONG = 0xFF3E3E3E
 color_bg : ULONG = 0xFFC1E7F6
-// color_gutter : ULONG = 0xFF242018
 color_gutter : ULONG = 0xFFF0F8FF
 // color_ultradark : ULONG = 0xFF242018
 
@@ -275,14 +274,7 @@ FN DrawTextBuffer ()
     WHILE TRUE DO
         piece := &table.Pieces.Elems[i]
         start := piece^.Start
-        buffer : ^UBYTE
-        IF start & 0x80000000 THEN
-            start -= 0x80000000
-            buffer = table.Add.Elems
-        ELSE
-            buffer = table.Original
-        END
-        c := buffer[start + inner_offset]
+        c := table.Data.Elems[start + inner_offset]
         color1 := color_fg
         color2 := color_bg
         IF bytes_until_cursor == 0 THEN
@@ -346,7 +338,7 @@ FN PreMain (
     stream = stream_
     file_loc.Name = NULLPTR
     window.FrameBuffer = NULLPTR
-    PtInit(NULLPTR, 0, &table)
+    PtNull(&table)
 END
     
 FN Main (
@@ -363,28 +355,24 @@ FN Main (
     END
     file_loc.Disk = GetCurrentDiskId()
     ParseFilePath(arg0, &file_loc)
-    file : File
-    IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
-        Print("Could not find file ")
-        Println(file_loc.Name)
-        EndCurrentTask()
+    IF TRUE THEN
+        file : File
+        IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
+            Print("Could not find file ")
+            Println(file_loc.Name)
+            EndCurrentTask()
+        END
+        PtInit(&file, &table)
+
+        size := GetSize(&file)
+        Print("opened ")
+        PrintUword(file_loc.Disk)
+        Print(":")
+        Print(file_loc.Name)
+        Print(" of ")
+        PrintUword(size)
+        Println(" bytes")
     END
-    size := GetSize(&file)
-    Print("opened ")
-    PrintUword(file_loc.Disk)
-    Print(":")
-    Print(file_loc.Name)
-    Print(" of ")
-    PrintUword(size)
-    Println(" bytes")
-    text_buffer : ^UBYTE = AllocateMemory(size)
-    IF NOT text_buffer THEN
-        Println("oops! oom")
-        Exit()
-    END
-    Read(&file, text_buffer, size)
-    PtFree(&table)
-    PtInit(text_buffer, size, &table)
     
     // create window title
     IF TRUE THEN
