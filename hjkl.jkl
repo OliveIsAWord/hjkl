@@ -9,6 +9,9 @@ call Main
 
 // Hey, this comment is getting a little long, don't you think?
 
+#DEFINE BLD_BITS 32
+#DEFINE ARCHITECTURE "fox32"
+#INCLUDE "rtl.hjk"
 #INCLUDE "rom.hjk"
 #INCLUDE "os.hjk"
 #INCLUDE "pt.jkl"
@@ -68,59 +71,13 @@ FN Exit ()
     EndCurrentTask()
 END
 
-FN Print (
-    IN str : ^UBYTE,
+FN (RtlPrintCallbackF) RtljPrintCallback (
+    IN byte : UBYTE,
+    IN context : ^VOID,
 )
-    len := StringLength(str)
-    Write(stream, str, len)
-END
-
-FN PrintUword (
-    IN x : UWORD,
-)
-    digit := 1
-    WHILE digit <= x DO
-        old_digit := digit
-        digit *= 10
-        IF old_digit > digit THEN
-            digit = old_digit
-            BREAK
-        END
-    END
-    IF digit > 1 THEN
-        digit /= 10
-    END
-    WHILE digit DO
-        d := x / digit
-        c := "0123456789" + d
-        Write(stream, c, 1)
-        x -= d * digit
-        digit /= 10
-    END
-END
-
-FN PrintNewline ()
-    Write(stream, "\n", 1)
-END
-
-FN Println (
-    IN str : ^UBYTE,
-)
-    len := StringLength(str)
-    Write(stream, str, len)
-    PrintNewline()
-END
-
-FN Hex (
-    IN n : UWORD,
-)
-    i : WORD = 28
-    WHILE i >= 0 DO
-        x := (n >> i) & 0xF
-        c := "0123456789ABCDEF" + x
-        Write(stream, c, 1)
-        i -= 4
-    END
+    buffer : UBYTE[1]
+    buffer[0] = byte
+    Write(stream, &buffer[0], 1)
 END
 
 FN Assert (
@@ -129,16 +86,10 @@ FN Assert (
     IN arg1 : UWORD,
     IN arg2 : UWORD,
 )
-    IF condition THEN LEAVE END
-    Print("Assertion error: ")
-    Println(label)
-    Print("Arg1: ")
-    PrintUword(arg1)
-    PrintNewline()
-    Print("Arg2: ")
-    PrintUword(arg2)
-    PrintNewline()
-    Exit()
+    IF NOT condition THEN
+        RtlPrint("Assertion error: %s\nArg1: %d\nArg2: %d\n", label, arg1, arg2)
+        Exit()
+    END
 END
 
 FN ParseFilePath (
@@ -350,7 +301,7 @@ FN Main (
 )
     PreMain(stream_)
     IF NOT arg0 OR arg1 | arg2 | arg3 THEN
-        Println("Usage: hjkl <file>")
+        RtlPrint("Usage: hjkl <file>\n")
         Exit()
     END
     file_loc.Disk = GetCurrentDiskId()
@@ -358,20 +309,11 @@ FN Main (
     IF TRUE THEN
         file : File
         IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
-            Print("Could not find file ")
-            Println(file_loc.Name)
+            RtlPrint("Could not find file %s\n", file_loc.Name)
             EndCurrentTask()
         END
         PtInit(&file, &table)
-
-        size := GetSize(&file)
-        Print("opened ")
-        PrintUword(file_loc.Disk)
-        Print(":")
-        Print(file_loc.Name)
-        Print(" of ")
-        PrintUword(size)
-        Println(" bytes")
+        RtlPrint("opened %d:%s of %d bytes\n", file_loc.Disk, file_loc.Name, GetSize(&file))
     END
     
     // create window title
@@ -384,10 +326,6 @@ FN Main (
             i += 1
         END
     END
-
-    Print(window_title) Print(" ")
-    PrintUword(width) Print("x")
-    PrintUword(height) PrintNewline()
     
     NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, 0, 0)
     FillWindow(&window, color_bg)
