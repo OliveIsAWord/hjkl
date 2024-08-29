@@ -94,10 +94,23 @@ FN PtInsert (
 )
     offset : UWORD
     piece := PtSeek(self, position, OUT offset)
-    Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
     Assert(piece >= 0, "todo: insert at end of file", CAST piece TO UWORD, position)
+    Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
     new_piece := VecPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
     new_piece^.Start = self^.Data.Length
     new_piece^.Length = 1
     VecUbyteReserveOne(&self^.Data)^ = char
+END
+
+// Remove the character at some byte offset.
+FN PtDelete (
+    IN self : ^Pt,
+    IN position : UWORD,
+)
+    IF position == 0 THEN LEAVE END
+    position -= 1
+    offset : UWORD
+    piece := PtSeek(self, position, OUT offset)
+    Assert(piece >= 0, "deleting a character past the buffer", position, CAST piece TO UWORD)
+    Assert(0, "todo: delete??", 0, 0)
 END

@@ -126,6 +126,8 @@ FN HandleKeyDown (
         cursor -= 1
     ELSEIF scancode == KEY_RIGHT THEN
         cursor += 1
+    ELSEIF scancode == KEY_BACKSPACE THEN
+        PtDelete(&table, cursor)
     ELSEIF
         // TODO: Support keypad?
         0x02 <= scancode AND scancode <= 0x0D
