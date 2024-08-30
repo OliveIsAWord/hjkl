@@ -210,4 +210,14 @@ GetSize:
     call get_size
     mov a3, r0
     ret
+
+Create:
+.global Create
+    mov r0, a0
+    mov r1, a1
+    mov r2, a2
+    mov r3, a3
+    call create
+    mov a3, r0
+    ret
 ]

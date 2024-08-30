@@ -57,6 +57,18 @@ FN PtFree (
     VecPieceFree(&self^.Pieces)
 END
 
+FN PtLength (
+    IN self : ^Pt,
+) : UWORD
+    length := 0
+    i := 0
+    WHILE i < self^.Pieces.Length DO
+        length += self^.Pieces.Elems[i].Length
+        i += 1
+    END
+    RETURN length
+END
+
 // Given a byte index, return the index of the piece containing that byte and the byte offset within that piece.
 FN PtSeek (
     IN self : ^Pt,
@@ -100,7 +112,6 @@ FN PtInsert (
         is_at_end := 0
         IF piece_index > 0 THEN
             original := &self^.Pieces.Elems[piece_index - 1]
-            RtlPrint("meow %d = %d\n", original^.Start + original^.Length, self^.Data.Length)
             IF original^.Start + original^.Length == self^.Data.Length THEN
                 is_at_end = 1
                 original^.Length += 1 // Modify the previous piece to be one longer
@@ -132,7 +143,6 @@ FN PtDelete (
 )
     offset : UWORD
     piece_index := PtSeek(self, position, OUT offset)
-    RtlPrint("meow %d %d %d\n", position, piece_index, offset)
     IF offset == 1 THEN
         piece := &self^.Pieces.Elems[piece_index]
         piece^.Start += 1
@@ -158,8 +168,8 @@ FN PtDelete (
 END
 
 FN StrDebug (
-    IN str: ^UBYTE,
-    IN length: UWORD,
+    IN str : ^UBYTE,
+    IN length : UWORD,
 )
     RtlPrint("\"")
     i := 0
@@ -182,7 +192,7 @@ FN StrDebug (
 END
 
 FN PtDebug (
-    IN self: ^Pt,
+    IN self : ^Pt,
 )
     length := self^.Pieces.Length
     RtlPrint("[Pt, Data: %db, %d Pieces]\n", self^.Data.Length, length)

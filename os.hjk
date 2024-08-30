@@ -52,10 +52,17 @@ STRUCT Position
     Y : ULONG,
 END
 
+STRUCT MenuChoice
+    MenuRoot : ^VOID,
+    RootChoice : ULONG,
+    ListChoice : ULONG,
+END
+
 UNION EventBody
     Pos : Position,
-    Parameters : ULONG[7],
     Scancode : UBYTE,
+    MenuChoice : MenuChoice,
+    Parameters : ULONG[7],
 END
 
 STRUCT Event
@@ -136,3 +143,10 @@ EXTERN FN Write (
 EXTERN FN GetSize (
     IN file : ^File,
 ) : UWORD
+
+EXTERN FN Create (
+    IN file_name : ^UBYTE,
+    IN disk_id : ULONG,
+    IN file : ^File,
+    IN size : ULONG,
+) : ULONG

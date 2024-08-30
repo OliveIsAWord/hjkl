@@ -91,9 +91,9 @@ CloseMenu:
     jmp close_menu
 MenuUpdateEvent:
 .global MenuUpdateEvent
-    mov r0, a0
-    mov r1, a1
-    mov r2, a2
+    mov r1, a0
+    mov r2, a1
+    mov r3, a2
     jmp menu_update_event
 
 IsRomDiskAvailable:

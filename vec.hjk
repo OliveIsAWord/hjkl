@@ -1,5 +1,6 @@
 #INCLUDE "os.hjk"
 #INCLUDE "rom.hjk"
+#INCLUDE "rtl.hjk"
 
 EXTERN FN Assert (
     IN condition : UBYTE,

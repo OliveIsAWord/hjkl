@@ -15,6 +15,7 @@ call Main
 #INCLUDE "rom.hjk"
 #INCLUDE "os.hjk"
 #INCLUDE "pt.jkl"
+#INCLUDE "menu.jkl"
 
 STRUCT FileLocation
     Disk : UBYTE,
@@ -118,20 +119,25 @@ END
 FN HandleKeyDown (
     IN scancode : UBYTE,
 )
+    redraw = TRUE
     IF scancode == KEY_UP THEN
         // cursor_y -= 1
     ELSEIF scancode == KEY_DOWN THEN
         // cursor_y += 1
     ELSEIF scancode == KEY_LEFT THEN
-        cursor -= 1
+        IF cursor THEN
+            cursor -= 1
+        END
     ELSEIF scancode == KEY_RIGHT THEN
-        cursor += 1
+        IF cursor < PtLength(&table) THEN
+            cursor += 1
+        END
     ELSEIF scancode == KEY_BACKSPACE THEN
+        RtlPrint("backspace at %d\n", cursor)
         PtDelete(&table, cursor)
         IF cursor THEN
             cursor -= 1
         END
-        redraw = TRUE
     ELSEIF
         // TODO: Support keypad?
         0x02 <= scancode AND scancode <= 0x0D
@@ -143,13 +149,30 @@ FN HandleKeyDown (
         c := ScancodeToAscii(scancode)
         PtInsert(&table, cursor, c)
         cursor += 1
-        redraw = TRUE
+    ELSE
+        redraw = FALSE
     END
 END
 
 FN HandleKeyUp (
     IN scancode : UBYTE,
 )
+END
+
+FN HandleMenuClick (
+    IN x : ULONG,
+    IN y : ULONG,
+)
+    // TODO: check x and y
+    file : File
+    sector := Create(file_loc.Name, file_loc.Disk, &file, PtLength(&table))
+    Assert(sector, "no room sory", file_loc.Disk, PtLength(&table))
+    i := 0
+    WHILE i < table.Pieces.Length DO
+        piece := &table.Pieces.Elems[i]
+        Write(&file, &table.Data.Elems[piece^.Start], piece^.Length)
+        i += 1
+    END
 END
 
 FN DrawPixel (
@@ -213,11 +236,6 @@ FN DrawReplacementTile (
 END
 
 FN DrawTextBuffer ()
-    IF redraw THEN
-        redraw = FALSE
-        FillWindow(&window, color_bg)
-        PtDebug(&table)
-    END
     gutter_y := 0
     WHILE gutter_y < height DO
         DrawFontTileToOverlay(' ', 0, gutter_y * 16 + 16, 0, color_gutter, window.Overlay)
@@ -243,10 +261,11 @@ FN DrawTextBuffer ()
         display_y := (y + 1) * 16
         IF c == 0x0a THEN // newline
             DrawFontTileToOverlay(' ', display_x, display_y, color1, color2, window.Overlay)
-            x = 0
-            y += 1
-            IF y >= height THEN
-                BREAK
+            x += 1
+            WHILE x < width DO
+                display_x = (x + 1) * 8
+                DrawFontTileToOverlay(' ', display_x, display_y, color_fg, 0xFFFF00FF, window.Overlay)
+                x += 1
             END
         ELSE
             IF c < 0x20 OR c > 0x7E THEN // unprintable character
@@ -255,12 +274,12 @@ FN DrawTextBuffer ()
                 DrawFontTileToOverlay(c, display_x, display_y, color1, color2, window.Overlay)
             END
             x += 1
-            IF x >= width THEN
-                x = 0
-                y += 1
-                IF y >= height THEN
-                    BREAK
-                END
+        END
+        IF x >= width THEN
+            x = 0
+            y += 1
+            IF y >= height THEN
+                BREAK
             END
         END
         bytes_until_cursor -= 1
@@ -272,6 +291,16 @@ FN DrawTextBuffer ()
                 BREAK
             END
         END
+    END
+    WHILE y < height DO
+        WHILE x < width DO
+            display_x := (x + 1) * 8
+            display_y := (y + 1) * 16
+            DrawFontTileToOverlay(' ', display_x, display_y, color_fg, 0xFF00FF00, window.Overlay)
+            x += 1
+        END
+        x = 0
+        y += 1
     END
     IF BOTTOM_BAR THEN
         bar_x := 0
@@ -334,21 +363,38 @@ FN Main (
         END
     END
     
-    NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, 0, 0)
+    NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, GetMenuItems(), 0)
     FillWindow(&window, color_bg)
     
     WHILE TRUE DO
-        YieldTask()
-        DrawTextBuffer()
-        YieldTask()
-        ev : Event
-        GetNextWindowEvent(&window, &ev)
-        IF ev.Type == EVENT_TYPE_MOUSE_CLICK THEN
-            HandleMouseClick(ev.Body.Pos.X, ev.Body.Pos.Y)
-        ELSEIF ev.Type == EVENT_TYPE_KEY_DOWN THEN
-            HandleKeyDown(ev.Body.Scancode)
-        ELSEIF ev.Type == EVENT_TYPE_KEY_UP THEN
-            HandleKeyUp(ev.Body.Scancode)
+        // Poll events until our queue is empty
+        WHILE TRUE DO
+            ev : Event
+            GetNextWindowEvent(&window, &ev)
+            IF ev.Type == EVENT_TYPE_EMPTY THEN
+                BREAK
+            ELSEIF ev.Type == EVENT_TYPE_MOUSE_CLICK THEN
+                HandleMouseClick(ev.Body.Pos.X, ev.Body.Pos.Y)
+            ELSEIF ev.Type == EVENT_TYPE_KEY_DOWN THEN
+                HandleKeyDown(ev.Body.Scancode)
+            ELSEIF ev.Type == EVENT_TYPE_KEY_UP THEN
+                HandleKeyUp(ev.Body.Scancode)
+            ELSEIF ev.Type == EVENT_TYPE_MENU_BAR_CLICK THEN
+                MenuBarClickEvent(GetMenuItems(), ev.Body.Pos.X)
+            ELSEIF ev.Type == EVENT_TYPE_MENU_UPDATE THEN
+                MenuUpdateEvent(CAST ev.Body.Parameters[0] TO ^VOID, ev.Body.Parameters[1], ev.Body.Parameters[2])
+            ELSEIF ev.Type == EVENT_TYPE_MENU_CLICK THEN
+                HandleMenuClick(ev.Body.MenuChoice.RootChoice, ev.Body.MenuChoice.ListChoice)
+            ELSEIF ev.Type == EVENT_TYPE_MENU_ACK THEN
+                CloseMenu(GetMenuItems())
+            END
         END
+        // Redraw the text buffer
+        IF redraw THEN
+            redraw = FALSE
+            DrawTextBuffer()
+            // PtDebug(&table)
+        END
+        YieldTask()
     END
 END
