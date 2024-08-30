@@ -120,7 +120,18 @@ FN HandleKeyDown (
     IN scancode : UBYTE,
 )
     redraw = TRUE
-    IF scancode == KEY_UP THEN
+    IF scancode == KEY_BACKSPACE THEN
+        PtDelete(&table, cursor)
+        IF cursor THEN
+            cursor -= 1
+        END
+    ELSEIF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
+        ShiftPressed()
+        redraw = FALSE
+    ELSEIF scancode == KEY_CAPS THEN
+        CapsPressed()
+        redraw = FALSE
+    ELSEIF scancode == KEY_UP THEN
         // cursor_y -= 1
     ELSEIF scancode == KEY_DOWN THEN
         // cursor_y += 1
@@ -132,12 +143,6 @@ FN HandleKeyDown (
         IF cursor < PtLength(&table) THEN
             cursor += 1
         END
-    ELSEIF scancode == KEY_BACKSPACE THEN
-        RtlPrint("backspace at %d\n", cursor)
-        PtDelete(&table, cursor)
-        IF cursor THEN
-            cursor -= 1
-        END
     ELSEIF
         // TODO: Support keypad?
         0x02 <= scancode AND scancode <= 0x0D
@@ -146,7 +151,7 @@ FN HandleKeyDown (
      OR 0x2B <= scancode AND scancode <= 0x35
      OR scancode == 0x39
     THEN
-        c := ScancodeToAscii(scancode)
+        c := ScancodeToAscii(scancode) // this is affected by ShiftPressed(), etc.
         PtInsert(&table, cursor, c)
         cursor += 1
     ELSE
@@ -157,6 +162,9 @@ END
 FN HandleKeyUp (
     IN scancode : UBYTE,
 )
+    IF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
+        ShiftReleased()
+    END
 END
 
 FN HandleMenuClick (
@@ -290,6 +298,16 @@ FN DrawTextBuffer ()
             IF i >= table.Pieces.Length THEN
                 BREAK
             END
+        END
+    END
+    IF y < height AND bytes_until_cursor == 0 THEN
+        display_x := (x + 1) * 8
+        display_y := (y + 1) * 16
+        DrawFontTileToOverlay(' ', display_x, display_y, 0, color_fg, window.Overlay)
+        x += 1
+        IF x >= width THEN
+            x = 0
+            y += 1
         END
     END
     WHILE y < height DO
