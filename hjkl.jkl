@@ -34,6 +34,8 @@ width : UBYTE = 32 // number of columns in the text buffer
 height : UBYTE = 20 // number of rows in the text buffer
 redraw : UBYTE = TRUE // redraw the text buffer?
 
+is_ctrl : UBYTE = FALSE // is the user holding the Ctrl key?
+
 // Bitbee
 // palette_fg : ULONG = 0xFF302B29
 // palette_bg : ULONG = 0xFF4AABCF
@@ -104,6 +106,18 @@ FN ParseFilePath (
     loc^.Name = fp
 END
 
+FN SaveFile ()
+    file : File
+    sector := Create(file_loc.Name, file_loc.Disk, &file, PtLength(&table))
+    Assert(sector, "no room sory", file_loc.Disk, PtLength(&table))
+    i := 0
+    WHILE i < table.Pieces.Length DO
+        piece := &table.Pieces.Elems[i]
+        Write(&file, &table.Data.Elems[piece^.Start], piece^.Length)
+        i += 1
+    END
+END
+
 FN HandleMouseClick (
     IN x : UINT,
     IN y : UINT,
@@ -116,6 +130,22 @@ FN HandleMouseClick (
     END
 END
 
+FN HandleCtrlKeyDown (
+    IN scancode : UBYTE,
+)
+    IF scancode == 0x1F THEN
+        SaveFile()
+    ELSEIF scancode == 0x21 THEN
+        IF cursor < PtLength(&table) THEN
+            cursor += 1
+        END
+    ELSEIF scancode == 0x30 THEN
+        IF cursor THEN
+            cursor -= 1
+        END
+    END
+END
+
 FN HandleKeyDown (
     IN scancode : UBYTE,
 )
@@ -125,6 +155,9 @@ FN HandleKeyDown (
         IF cursor THEN
             cursor -= 1
         END
+    ELSEIF scancode == KEY_CTRL THEN
+        is_ctrl = TRUE
+        redraw = FALSE
     ELSEIF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
         ShiftPressed()
         redraw = FALSE
@@ -143,6 +176,8 @@ FN HandleKeyDown (
         IF cursor < PtLength(&table) THEN
             cursor += 1
         END
+    ELSEIF is_ctrl THEN
+        HandleCtrlKeyDown(scancode)
     ELSEIF
         // TODO: Support keypad?
         0x02 <= scancode AND scancode <= 0x0D
@@ -164,6 +199,8 @@ FN HandleKeyUp (
 )
     IF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
         ShiftReleased()
+    ELSEIF scancode == KEY_CTRL THEN
+        is_ctrl = FALSE
     END
 END
 
@@ -172,15 +209,7 @@ FN HandleMenuClick (
     IN y : ULONG,
 )
     // TODO: check x and y
-    file : File
-    sector := Create(file_loc.Name, file_loc.Disk, &file, PtLength(&table))
-    Assert(sector, "no room sory", file_loc.Disk, PtLength(&table))
-    i := 0
-    WHILE i < table.Pieces.Length DO
-        piece := &table.Pieces.Elems[i]
-        Write(&file, &table.Data.Elems[piece^.Start], piece^.Length)
-        i += 1
-    END
+    SaveFile()
 END
 
 FN DrawPixel (
