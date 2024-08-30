@@ -1,4 +1,5 @@
 #INCLUDE "vec.hjk"
+#INCLUDE "rtl.hjk"
 
 #DEFINE BUFFER_OVERALLOC 0
 
@@ -16,6 +17,7 @@ VecOf (
     VecPieceGrow,
     VecPieceReserveOne,
     VecPieceReserveAt,
+    VecPieceRemove,
 )
 
 // The piece table, a simple text data structure suited for efficient, arbitrary edits across a file.
@@ -60,7 +62,7 @@ FN PtSeek (
     IN self : ^Pt,
     IN seek_to : UWORD,
     OUT offset : UWORD,
-) : WORD
+) : UWORD
     i := 0
     seek_at := 0
     WHILE i < self^.Pieces.Length DO
@@ -72,8 +74,8 @@ FN PtSeek (
         seek_at += len
         i += 1
     END
-    Assert(0, "out of bounds", seek_to, i)
-    // RETURN -1
+    offset = 0
+    RETURN i
 END
 
 // Given a piece index and byte offset within that piece, return the byte at that position.
@@ -93,13 +95,34 @@ FN PtInsert (
     IN char : UBYTE,
 )
     offset : UWORD
-    piece := PtSeek(self, position, OUT offset)
-    Assert(piece >= 0, "todo: insert at end of file", CAST piece TO UWORD, position)
-    Assert(offset == 0, "todo: insert inside piece", CAST piece TO UWORD, position)
-    new_piece := VecPieceReserveAt(&self^.Pieces, CAST piece TO UWORD, 1)
-    new_piece^.Start = self^.Data.Length
-    new_piece^.Length = 1
-    VecUbyteReserveOne(&self^.Data)^ = char
+    piece_index := PtSeek(self, position, OUT offset)
+    IF offset == 0 THEN
+        is_at_end := 0
+        IF piece_index > 0 THEN
+            original := &self^.Pieces.Elems[piece_index - 1]
+            RtlPrint("meow %d = %d\n", original^.Start + original^.Length, self^.Data.Length)
+            IF original^.Start + original^.Length == self^.Data.Length THEN
+                is_at_end = 1
+                original^.Length += 1 // Modify the previous piece to be one longer
+            END
+       END
+       IF is_at_end == 0 THEN
+            piece_new := VecPieceReserveAt(&self^.Pieces, piece_index, 1) // Allocate a new piece right *before* the current one
+            piece_new^.Start = self^.Data.Length
+            piece_new^.Length = 1
+        END
+        VecUbyteReserveOne(&self^.Data)^ = char
+    ELSE
+        piece_new := VecPieceReserveAt(&self^.Pieces, piece_index + 1, 2) // Allocate two pieces right *after* the current one; the first contains new data, the second the rest of the original piece
+        piece_left := &self^.Pieces.Elems[piece_index]
+        piece_right := &piece_new[1]
+        piece_right^.Start = piece_left^.Start + offset
+        piece_right^.Length = piece_left^.Length - offset
+        piece_left^.Length = offset
+        piece_new^.Start = self^.Data.Length
+        piece_new^.Length = 1
+        VecUbyteReserveOne(&self^.Data)^ = char
+    END
 END
 
 // Remove the character at some byte offset.
@@ -107,10 +130,68 @@ FN PtDelete (
     IN self : ^Pt,
     IN position : UWORD,
 )
-    IF position == 0 THEN LEAVE END
-    position -= 1
     offset : UWORD
-    piece := PtSeek(self, position, OUT offset)
-    Assert(piece >= 0, "deleting a character past the buffer", position, CAST piece TO UWORD)
-    Assert(0, "todo: delete??", 0, 0)
+    piece_index := PtSeek(self, position, OUT offset)
+    RtlPrint("meow %d %d %d\n", position, piece_index, offset)
+    IF offset == 1 THEN
+        piece := &self^.Pieces.Elems[piece_index]
+        piece^.Start += 1
+        piece^.Length -= 1
+        LEAVE
+    END
+    IF offset > 0 THEN
+        // Assert(0, "todo offset", piece_index, offset)
+        new_piece := VecPieceReserveAt(&self^.Pieces, piece_index + 1, 1)
+        piece := &self^.Pieces.Elems[piece_index]
+        new_piece^.Start = piece^.Start + offset
+        new_piece^.Length = piece^.Length - offset
+        piece^.Length = offset - 1
+        LEAVE
+    END
+    IF piece_index == 0 THEN LEAVE END
+    piece := &self^.Pieces.Elems[piece_index - 1]
+    IF piece^.Length > 1 THEN
+        piece^.Length -= 1
+    ELSE
+        VecPieceRemove(&self^.Pieces, piece_index - 1)
+    END
+END
+
+FN StrDebug (
+    IN str: ^UBYTE,
+    IN length: UWORD,
+)
+    RtlPrint("\"")
+    i := 0
+    WHILE i < length DO
+        c := str[i]
+        IF c == '"' THEN
+            RtlPrint("\\\"")
+        ELSEIF c == '\\' THEN
+            RtlPrint("\\\\")
+        ELSEIF ' ' <= c AND c <= '~' THEN
+            RtlPrint("%c", c)
+        ELSEIF c == '\n' THEN
+            RtlPrint("\\n")
+        ELSE 
+            RtlPrint("\\x%02x", c)
+        END
+        i += 1
+    END
+    RtlPrint("\"")
+END
+
+FN PtDebug (
+    IN self: ^Pt,
+)
+    length := self^.Pieces.Length
+    RtlPrint("[Pt, Data: %db, %d Pieces]\n", self^.Data.Length, length)
+    i := 0
+    WHILE i < length DO
+        piece := &self^.Pieces.Elems[i]
+        RtlPrint("%d - Start: %d Length: %d ", i, piece^.Start, piece^.Length)
+        StrDebug(&self^.Data.Elems[piece^.Start], piece^.Length)
+        RtlPrint("\n")
+        i += 1
+    END
 END

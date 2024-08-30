@@ -128,6 +128,10 @@ FN HandleKeyDown (
         cursor += 1
     ELSEIF scancode == KEY_BACKSPACE THEN
         PtDelete(&table, cursor)
+        IF cursor THEN
+            cursor -= 1
+        END
+        redraw = TRUE
     ELSEIF
         // TODO: Support keypad?
         0x02 <= scancode AND scancode <= 0x0D
@@ -212,6 +216,7 @@ FN DrawTextBuffer ()
     IF redraw THEN
         redraw = FALSE
         FillWindow(&window, color_bg)
+        PtDebug(&table)
     END
     gutter_y := 0
     WHILE gutter_y < height DO

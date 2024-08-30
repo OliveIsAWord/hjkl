@@ -18,6 +18,7 @@ EXTERN FN Assert (
     VecTGrow,
     VecTReserveOne,
     VecTReserveAt,
+    VecTRemove,
 ) [
 
 // A vector, i.e. a growable array.
@@ -107,6 +108,18 @@ FN VecTReserveAt (
     self^.Length = new_length
     RETURN &self^.Elems[index]
 END
+
+// TODO docs
+FN VecTRemove (
+    IN self : ^VecT,
+    IN index : UWORD,
+)
+    self^.Length -= 1
+    WHILE index < self^.Length DO
+        CopyMemoryBytes(&self^.Elems[index + 1], &self^.Elems[index], SIZEOF T)
+        index += 1
+    END
+END
 ]
 
 VecOf (
@@ -118,4 +131,5 @@ VecOf (
     VecUbyteGrow,
     VecUbyteReserveOne,
     VecUbyteReserveAt,
+    VecUbyteRemove,
 )
