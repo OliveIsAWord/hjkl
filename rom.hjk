@@ -6,7 +6,7 @@ EXTERN FN ShiftReleased()
 EXTERN FN CapsPressed()
 
 EXTERN FN FillOverlay(
-    IN color: UWORD,
+    IN color: ULONG,
     IN overlay: UBYTE,
 )
 EXTERN FN DrawStrToOverlay(
@@ -26,15 +26,19 @@ EXTERN FN DrawFontTileToOverlay(
     IN overlay: UBYTE,
 )
 
+STRUCT Menu
+    Items : UBYTE
+END
+
 EXTERN FN MenuBarClickEvent(
-    IN rootStruct: ^VOID,
-    IN x: UWORD,
+    IN rootStruct: ^Menu,
+    IN x: UINT,
 )
 EXTERN FN CloseMenu(
-    IN rootStruct: ^VOID,
+    IN rootStruct: ^Menu,
 )
 EXTERN FN MenuUpdateEvent(
-    IN rootStruct: ^VOID,
+    IN rootStruct: ^Menu,
     IN selectedRootItem: UWORD,
     IN hoveringItem: UWORD,
 )

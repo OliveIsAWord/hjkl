@@ -15,7 +15,21 @@ call Main
 #INCLUDE "rom.hjk"
 #INCLUDE "os.hjk"
 #INCLUDE "pt.jkl"
-#INCLUDE "menu.jkl"
+
+EXTERN menu_bar : Menu
+
+#ASM [
+menu_bar:
+    .db 1
+    .dp menu_file_items
+    .dp menu_file_name
+menu_file_name:
+    .db 4 .ds "File" .db 0
+menu_file_items:
+    .db 1
+    .db 6
+    .db 4 .ds "Save" .db 0
+]
 
 STRUCT FileLocation
     Disk : UBYTE,
@@ -205,10 +219,10 @@ FN HandleKeyUp (
 END
 
 FN HandleMenuClick (
-    IN x : ULONG,
-    IN y : ULONG,
+    IN menu : UWORD,
+    IN item : UWORD,
 )
-    // TODO: check x and y
+    Assert(menu == 0 AND item == 0, "invalid menu choice", menu, item)
     SaveFile()
 END
 
@@ -410,7 +424,7 @@ FN Main (
         END
     END
     
-    NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, GetMenuItems(), 0)
+    NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, &menu_bar, 0)
     FillWindow(&window, color_bg)
     
     WHILE TRUE DO
@@ -427,13 +441,13 @@ FN Main (
             ELSEIF ev.Type == EVENT_TYPE_KEY_UP THEN
                 HandleKeyUp(ev.Body.Scancode)
             ELSEIF ev.Type == EVENT_TYPE_MENU_BAR_CLICK THEN
-                MenuBarClickEvent(GetMenuItems(), ev.Body.Pos.X)
+                MenuBarClickEvent(&menu_bar, ev.Body.Pos.X)
             ELSEIF ev.Type == EVENT_TYPE_MENU_UPDATE THEN
-                MenuUpdateEvent(CAST ev.Body.Parameters[0] TO ^VOID, ev.Body.Parameters[1], ev.Body.Parameters[2])
+                MenuUpdateEvent(&menu_bar, ev.Body.MenuChoice.Menu, ev.Body.MenuChoice.Item)
             ELSEIF ev.Type == EVENT_TYPE_MENU_CLICK THEN
-                HandleMenuClick(ev.Body.MenuChoice.RootChoice, ev.Body.MenuChoice.ListChoice)
+                HandleMenuClick(ev.Body.MenuChoice.Menu, ev.Body.MenuChoice.Item)
             ELSEIF ev.Type == EVENT_TYPE_MENU_ACK THEN
-                CloseMenu(GetMenuItems())
+                CloseMenu(&menu_bar)
             END
         END
         // Redraw the text buffer

@@ -1,3 +1,5 @@
+#INCLUDE "rom.hjk"
+
 // system
 
 EXTERN FN GetCurrentDiskId() : UBYTE
@@ -53,9 +55,9 @@ STRUCT Position
 END
 
 STRUCT MenuChoice
-    MenuRoot : ^VOID,
-    RootChoice : ULONG,
-    ListChoice : ULONG,
+    Bar : ^Menu, // pointer to the menu bar table
+    Menu : UWORD, // index of the selected menu
+    Item : UWORD, // index of the selected item in the selected menu
 END
 
 UNION EventBody
