@@ -9,15 +9,16 @@ call Main
 
 // Hey, this comment is getting a little long, don't you think?
 
+// macro definitions to make the Rtl library happy
 #DEFINE BLD_BITS 32
 #DEFINE ARCHITECTURE "fox32"
-#INCLUDE "rtl.hjk"
-#INCLUDE "rom.hjk"
-#INCLUDE "os.hjk"
-#INCLUDE "pt.jkl"
 
-EXTERN menu_bar : Menu
+#INCLUDE "rtl.hjk" // Printing functionality
+#INCLUDE "rom.hjk" // fox32os bindings
+#INCLUDE "os.hjk" // fox32rom bindings
+#INCLUDE "pt.jkl" // piece table implementation
 
+EXTERN menu_bar : Menu // data table defining a menu bar in fox32os' required format
 #ASM [
 menu_bar:
     .db 1
@@ -47,7 +48,6 @@ cursor : UWORD = 0 // cursor position within file in bytes
 width : UBYTE = 32 // number of columns in the text buffer
 height : UBYTE = 20 // number of rows in the text buffer
 redraw : UBYTE = TRUE // redraw the text buffer?
-
 is_ctrl : UBYTE = FALSE // is the user holding the Ctrl key?
 
 // Bitbee
@@ -59,8 +59,19 @@ color_bg : ULONG = 0xFFC1E7F6
 color_gutter : ULONG = 0xFFF0F8FF
 // color_ultradark : ULONG = 0xFF242018
 
-#DEFINE BOTTOM_BAR 0
+#DEFINE BOTTOM_BAR 0 // enable the Vi/Emacs style minibuffer at the bottom of the window
 
+// Function used by printing library to emit characters
+FN (RtlPrintCallbackF) RtljPrintCallback (
+    IN byte : UBYTE,
+    IN context : ^VOID,
+)
+    buffer : UBYTE[1]
+    buffer[0] = byte
+    Write(stream, &buffer[0], 1)
+END
+
+// 1-bit images for each hexidecimal digit, for displaying non-printable bytes
 small_digits : UINT[16] = {
     075557,
     026227,
@@ -86,15 +97,6 @@ FN Exit ()
     END
     PtFree(&table)
     EndCurrentTask()
-END
-
-FN (RtlPrintCallbackF) RtljPrintCallback (
-    IN byte : UBYTE,
-    IN context : ^VOID,
-)
-    buffer : UBYTE[1]
-    buffer[0] = byte
-    Write(stream, &buffer[0], 1)
 END
 
 FN Assert (
@@ -142,6 +144,12 @@ FN HandleMouseClick (
         StartDraggingWindow(&window) // NOTE: This blocks *all* tasks, including ours, until the user releases the mouse click
         LEAVE
     END
+END
+
+FN HandleMouseRelease (
+    IN x : UINT,
+    IN y : UINT,
+)
 END
 
 FN HandleCtrlKeyDown (
@@ -229,10 +237,9 @@ END
 FN DrawPixel (
     IN x : UINT,
     IN y : UINT,
-    IN agh : ULONG,
+    IN color : ULONG,
 )
-    xx := &window.FrameBuffer[window.Width * y + x]
-    xx^ = agh
+    window.FrameBuffer[window.Width * y + x] = color
 END
 
 FN DrawReplacementTile (
@@ -436,6 +443,8 @@ FN Main (
                 BREAK
             ELSEIF ev.Type == EVENT_TYPE_MOUSE_CLICK THEN
                 HandleMouseClick(ev.Body.Pos.X, ev.Body.Pos.Y)
+            ELSEIF ev.Type == EVENT_TYPE_MOUSE_RELEASE THEN
+                HandleMouseRelease(ev.Body.Pos.X, ev.Body.Pos.Y)
             ELSEIF ev.Type == EVENT_TYPE_KEY_DOWN THEN
                 HandleKeyDown(ev.Body.Scancode)
             ELSEIF ev.Type == EVENT_TYPE_KEY_UP THEN
@@ -448,6 +457,8 @@ FN Main (
                 HandleMenuClick(ev.Body.MenuChoice.Menu, ev.Body.MenuChoice.Item)
             ELSEIF ev.Type == EVENT_TYPE_MENU_ACK THEN
                 CloseMenu(&menu_bar)
+            ELSE
+                // We got a bad type. Ignore it?
             END
         END
         // Redraw the text buffer
