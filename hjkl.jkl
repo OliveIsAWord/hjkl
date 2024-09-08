@@ -45,9 +45,10 @@ table : Pt // text data
 view_byte_offset : UWORD = 0 // start of text view
 cursor : UWORD = 0 // cursor position within file in bytes
 // cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
-width : UBYTE = 32 // number of columns in the text buffer
-height : UBYTE = 20 // number of rows in the text buffer
+width : UBYTE = 32 // number of columns in the view buffer
+height : UBYTE = 20 // number of rows in the view buffer
 redraw : UBYTE = TRUE // redraw the text buffer?
+view_buffer : ^UBYTE = NULLPTR // a 2D array representing the visible portion of the text buffer
 is_ctrl : UBYTE = FALSE // is the user holding the Ctrl key?
 
 // Bitbee
@@ -58,8 +59,6 @@ color_fg : ULONG = 0xFF3E3E3E
 color_bg : ULONG = 0xFFC1E7F6
 color_gutter : ULONG = 0xFFF0F8FF
 // color_ultradark : ULONG = 0xFF242018
-
-#DEFINE BOTTOM_BAR 0 // enable the Vi/Emacs style minibuffer at the bottom of the window
 
 // Function used by printing library to emit characters
 FN (RtlPrintCallbackF) RtljPrintCallback (
@@ -94,6 +93,9 @@ small_digits : UINT[16] = {
 FN Exit ()
     IF window.FrameBuffer THEN
         DestroyWindow(&window)
+    END
+    IF view_buffer THEN
+        FreeMemory(view_buffer)
     END
     PtFree(&table)
     EndCurrentTask()
@@ -160,10 +162,12 @@ FN HandleCtrlKeyDown (
     ELSEIF scancode == 0x21 THEN
         IF cursor < PtLength(&table) THEN
             cursor += 1
+            redraw = TRUE
         END
     ELSEIF scancode == 0x30 THEN
         IF cursor THEN
             cursor -= 1
+            redraw = TRUE
         END
     END
 END
@@ -171,32 +175,39 @@ END
 FN HandleKeyDown (
     IN scancode : UBYTE,
 )
-    redraw = TRUE
     IF scancode == KEY_BACKSPACE THEN
         PtDelete(&table, cursor)
         IF cursor THEN
             cursor -= 1
+            redraw = TRUE
         END
     ELSEIF scancode == KEY_CTRL THEN
         is_ctrl = TRUE
-        redraw = FALSE
     ELSEIF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
         ShiftPressed()
-        redraw = FALSE
     ELSEIF scancode == KEY_CAPS THEN
         CapsPressed()
-        redraw = FALSE
     ELSEIF scancode == KEY_UP THEN
         // cursor_y -= 1
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
+        HandleKeyDown(KEY_LEFT)
     ELSEIF scancode == KEY_DOWN THEN
         // cursor_y += 1
     ELSEIF scancode == KEY_LEFT THEN
         IF cursor THEN
             cursor -= 1
+            redraw = TRUE
         END
     ELSEIF scancode == KEY_RIGHT THEN
         IF cursor < PtLength(&table) THEN
             cursor += 1
+            redraw = TRUE
         END
     ELSEIF is_ctrl THEN
         HandleCtrlKeyDown(scancode)
@@ -211,8 +222,7 @@ FN HandleKeyDown (
         c := ScancodeToAscii(scancode) // this is affected by ShiftPressed(), etc.
         PtInsert(&table, cursor, c)
         cursor += 1
-    ELSE
-        redraw = FALSE
+        redraw = TRUE
     END
 END
 
@@ -232,6 +242,59 @@ FN HandleMenuClick (
 )
     Assert(menu == 0 AND item == 0, "invalid menu choice", menu, item)
     SaveFile()
+END
+
+// Render the current text buffer to view_buffer
+FN RenderViewBuffer ()
+    inner_offset : UWORD
+    i := PtSeek(&table, view_byte_offset, OUT inner_offset)
+    cursor_pos := cursor - view_byte_offset
+    x := 0
+    buffer_pos := 0
+    WHILE buffer_pos < width * height DO
+        piece := &table.Pieces.Elems[i]
+        c := table.Data.Elems[piece^.Start + inner_offset]
+        is_cursor := 0
+        IF cursor_pos == 0 THEN
+            is_cursor = 1
+        END
+        cursor_pos -= 1
+        IF c == '\n' THEN
+            WHILE x < width DO
+                view_buffer[buffer_pos * 2] = ' '
+                view_buffer[buffer_pos * 2 + 1] = is_cursor
+                is_cursor = 0
+                buffer_pos += 1
+                x += 1
+            END
+        ELSE
+            view_buffer[buffer_pos * 2] = c
+            view_buffer[buffer_pos * 2 + 1] = is_cursor
+            buffer_pos += 1
+            x += 1
+        END
+        IF x >= width THEN
+            x = 0
+        END
+        inner_offset += 1
+        IF inner_offset >= piece^.Length THEN
+            inner_offset = 0
+            i += 1
+            IF i >= table.Pieces.Length THEN
+                BREAK
+            END
+        END
+    END
+    is_cursor := 0
+    IF cursor_pos == 0 THEN
+        is_cursor = 1
+    END
+    WHILE buffer_pos < width * height DO
+        view_buffer[buffer_pos * 2] = ' '
+        view_buffer[buffer_pos * 2 + 1] = is_cursor
+        is_cursor = 0
+        buffer_pos += 1
+    END
 END
 
 FN DrawPixel (
@@ -293,89 +356,48 @@ FN DrawReplacementTile (
     END
 END
 
-FN DrawTextBuffer ()
-    gutter_y := 0
-    WHILE gutter_y < height DO
-        DrawFontTileToOverlay(' ', 0, gutter_y * 16 + 16, 0, color_gutter, window.Overlay)
-        DrawFontTileToOverlay(' ', (width + 1) * 8, gutter_y * 16 + 16, 0, color_gutter, window.Overlay)
-        gutter_y += 1
-    END
-    inner_offset : UWORD
-    i := PtSeek(&table, view_byte_offset, OUT inner_offset)
-    x := 0
+FN DisplayInitial ()
+    FillWindow(&window, color_bg)
     y := 0
-    bytes_until_cursor := cursor - view_byte_offset
-    WHILE TRUE DO
-        piece := &table.Pieces.Elems[i]
-        start := piece^.Start
-        c := table.Data.Elems[start + inner_offset]
-        color1 := color_fg
-        color2 := color_bg
-        IF bytes_until_cursor == 0 THEN
-            color1 = color_bg
-            color2 = color_fg
-        END
-        display_x := (x + 1) * 8
-        display_y := (y + 1) * 16
-        IF c == 0x0a THEN // newline
-            DrawFontTileToOverlay(' ', display_x, display_y, color1, color2, window.Overlay)
-            x += 1
-            WHILE x < width DO
-                display_x = (x + 1) * 8
-                DrawFontTileToOverlay(' ', display_x, display_y, color_fg, 0xFFFF00FF, window.Overlay)
-                x += 1
-            END
-        ELSE
-            IF c < 0x20 OR c > 0x7E THEN // unprintable character
-                DrawReplacementTile(c, display_x, display_y, color1, color2)
-            ELSE // printable character
-                DrawFontTileToOverlay(c, display_x, display_y, color1, color2, window.Overlay)
-            END
-            x += 1
-        END
-        IF x >= width THEN
-            x = 0
-            y += 1
-            IF y >= height THEN
-                BREAK
-            END
-        END
-        bytes_until_cursor -= 1
-        inner_offset += 1
-        IF inner_offset >= piece^.Length THEN
-            inner_offset = 0
-            i += 1
-            IF i >= table.Pieces.Length THEN
-                BREAK
-            END
-        END
-    END
-    IF y < height AND bytes_until_cursor == 0 THEN
-        display_x := (x + 1) * 8
-        display_y := (y + 1) * 16
-        DrawFontTileToOverlay(' ', display_x, display_y, 0, color_fg, window.Overlay)
-        x += 1
-        IF x >= width THEN
-            x = 0
-            y += 1
-        END
-    END
     WHILE y < height DO
-        WHILE x < width DO
-            display_x := (x + 1) * 8
-            display_y := (y + 1) * 16
-            DrawFontTileToOverlay(' ', display_x, display_y, color_fg, 0xFF00FF00, window.Overlay)
-            x += 1
-        END
-        x = 0
+        DrawFontTileToOverlay(' ', 0, y * 16 + 16, 0, color_gutter, window.Overlay)
+        DrawFontTileToOverlay(' ', (width + 1) * 8, y * 16 + 16, 0, color_gutter, window.Overlay)
         y += 1
     END
-    IF BOTTOM_BAR THEN
-        bar_x := 0
-        WHILE bar_x < width + 2 DO
-            DrawFontTileToOverlay(' ', bar_x * 8, y * 16 + 16, 0, color_gutter, window.Overlay)
-            bar_x += 1
+END
+
+FN DisplayViewBuffer ()
+    y := 0
+    WHILE y < height DO
+        x := 0
+        WHILE x < width DO
+            i := y * width + x
+            char := view_buffer[i * 2]
+            meta := view_buffer[i * 2 + 1]
+            IF
+                char == view_buffer[i * 2 + width * height * 2] AND
+                meta == view_buffer[i * 2 + 1 + width * height * 2]
+            THEN
+                x += 1
+                CONTINUE
+            END
+            display_x := (x + 1) * 8
+            display_y := (y + 1) * 16
+            color1 := color_fg
+            color2 := color_bg
+            IF meta & 1 THEN
+                temp := color1
+                color1 = color2
+                color2 = temp
+            END
+            IF 0x20 <= char AND char <= 0x7E THEN
+                DrawFontTileToOverlay(char, display_x, display_y, color1, color2, window.Overlay)
+            ELSE
+                DrawReplacementTile(char, display_x, display_y, color1, color2)
+            END
+            x += 1
         END
+        y += 1
     END
 END
 
@@ -408,13 +430,17 @@ FN Main (
         RtlPrint("Usage: hjkl <file>\n")
         Exit()
     END
+
+    // Get filepath to open
     file_loc.Disk = GetCurrentDiskId()
     ParseFilePath(arg0, &file_loc)
+
+    // Open and read file to memory
     IF TRUE THEN
         file : File
         IF NOT Open(file_loc.Name, file_loc.Disk, &file) THEN
             RtlPrint("Could not find file %s\n", file_loc.Name)
-            EndCurrentTask()
+            Exit()
         END
         PtInit(&file, &table)
         RtlPrint("opened %d:%s of %d bytes\n", file_loc.Disk, file_loc.Name, GetSize(&file))
@@ -430,9 +456,21 @@ FN Main (
             i += 1
         END
     END
+
+    // allocate the view buffer and imagine the previous frame is blank
+    view_buffer = AllocateMemory(width * height * 4)
+    IF TRUE THEN
+        last_frame := view_buffer + width * height * 2
+        i := 0
+        WHILE i < width * height DO
+            last_frame[i * 2] = ' '
+            last_frame[i * 2 + 1] = 0
+            i += 1
+        END
+    END
     
     NewWindow(&window, window_title, (width + 2) * 8, height * 16, 160, 20, &menu_bar, 0)
-    FillWindow(&window, color_bg)
+    DisplayInitial()
     
     WHILE TRUE DO
         // Poll events until our queue is empty
@@ -464,7 +502,14 @@ FN Main (
         // Redraw the text buffer
         IF redraw THEN
             redraw = FALSE
-            DrawTextBuffer()
+            t0 := Millis()
+            RenderViewBuffer()
+            t1 := Millis()
+            DisplayViewBuffer()
+            t2 := Millis()
+            CopyMemoryBytes(view_buffer, view_buffer + width * height * 2, width * height * 2)
+            t3 := Millis()
+            RtlPrint("%d %d %d\n", t1-t0, t2-t1, t3-t2)
             // PtDebug(&table)
         END
         YieldTask()
