@@ -44,7 +44,8 @@ window_title := "Hjkl - 0:12345678.123" // text displayed at the title bar
 table : Pt // text data
 view_byte_offset : UWORD = 0 // start of text view
 cursor : UWORD = 0 // cursor position within file in bytes
-// cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
+cursor_desired_offset : UWORD = 0 // how many columns further the cursor should "stick" to
+line_mode_visual : UBYTE = TRUE // Navigate by visual lines instead of absolute ones
 width : UBYTE = 32 // number of columns in the view buffer
 height : UBYTE = 20 // number of rows in the view buffer
 redraw : UBYTE = TRUE // redraw the text buffer?
@@ -136,6 +137,116 @@ FN SaveFile ()
     END
 END
 
+// Get the position of the given index within its line. The returned value will always be less than or equal to the input.
+FN LineStartOffsetAbsolute (
+    IN position : UWORD
+) : UWORD
+    i := 0
+    WHILE i < position AND PtAt(&table, position - i - 1) != '\n' DO
+        i += 1
+    END
+    RETURN i
+END
+
+// Get how far the end of the line is after the given index.
+FN LineEndOffsetAbsolute (
+    IN position : UWORD
+) : UWORD
+    i := 0
+    WHILE
+        position + i < PtLength(&table) AND
+        PtAt(&table, position + i) != '\n'
+    DO
+        i += 1
+    END
+    RETURN i
+END
+
+// `LineStartOffsetAbsolute` accounting for `line_mode_visual`.
+FN LineStartOffset (
+    IN position : UWORD
+) : UWORD
+    offset := LineStartOffsetAbsolute(position)
+    IF line_mode_visual THEN
+        offset %= width
+    END
+    RETURN offset
+END
+
+FN CursorMoveLeft()
+    IF cursor THEN
+        cursor -= 1
+        redraw = TRUE
+    END
+    cursor_desired_offset = 0
+END
+
+FN CursorMoveRight()
+    IF cursor < PtLength(&table) THEN
+        cursor += 1
+        redraw = TRUE
+    END
+    cursor_desired_offset = 0
+END
+
+FN CursorMoveUp()
+    len := LineStartOffset(cursor)
+    // if we're on the first line, don't move the cursor
+    IF cursor == len THEN
+        LEAVE
+    END
+    redraw = TRUE
+    prev_len := LineStartOffset(cursor - len - 1)
+    desired_len := len + cursor_desired_offset
+    move_by := len
+    IF prev_len >= desired_len THEN
+        move_by = prev_len - cursor_desired_offset
+        cursor_desired_offset = 0
+    ELSE
+        cursor_desired_offset = desired_len - prev_len
+    END
+    cursor -= move_by + 1
+END
+
+FN CursorMoveDown()
+    next_line_offset := LineEndOffsetAbsolute(cursor)
+    next_line := cursor + next_line_offset + 1
+    IF next_line > PtLength(&table) THEN
+        diff := next_line - PtLength(&table)
+        Assert(diff == 1, "CursorMoveDown", diff, cursor)
+        LEAVE
+    END
+    redraw = TRUE
+    next_line_len := LineEndOffsetAbsolute(next_line)
+    x := LineStartOffset(cursor)
+    desired_x := x + cursor_desired_offset
+    IF next_line_len >= desired_x THEN
+        cursor = next_line + desired_x
+        cursor_desired_offset = 0
+    ELSE
+        cursor = next_line + next_line_len
+        cursor_desired_offset = desired_x - next_line_len
+    END
+END
+
+FN CursorMoveLineStart()
+    offset := LineStartOffsetAbsolute(cursor)
+    IF offset THEN
+        cursor -= offset
+        redraw = TRUE
+    END
+    cursor_desired_offset = 0
+END
+
+FN CursorMoveLineEnd()
+    offset := LineEndOffsetAbsolute(cursor)
+    IF offset THEN
+        cursor += offset
+        redraw = TRUE
+    END
+    cursor_desired_offset = 0
+END
+
 FN HandleMouseClick (
     IN x : UINT,
     IN y : UINT,
@@ -157,18 +268,22 @@ END
 FN HandleCtrlKeyDown (
     IN scancode : UBYTE,
 )
-    IF scancode == 0x1F THEN
+    IF scancode == KEY_S THEN
         SaveFile()
-    ELSEIF scancode == 0x21 THEN
-        IF cursor < PtLength(&table) THEN
-            cursor += 1
-            redraw = TRUE
-        END
-    ELSEIF scancode == 0x30 THEN
-        IF cursor THEN
-            cursor -= 1
-            redraw = TRUE
-        END
+    ELSEIF scancode == KEY_C THEN
+        Exit()
+    ELSEIF scancode == KEY_F THEN
+        CursorMoveRight()
+    ELSEIF scancode == KEY_B THEN
+        CursorMoveLeft()
+    ELSEIF scancode == KEY_P THEN
+        CursorMoveUp()
+    ELSEIF scancode == KEY_N THEN
+        CursorMoveDown()
+    ELSEIF scancode == KEY_A THEN
+        CursorMoveLineStart()
+    ELSEIF scancode == KEY_E THEN
+        CursorMoveLineEnd()
     END
 END
 
@@ -188,27 +303,13 @@ FN HandleKeyDown (
     ELSEIF scancode == KEY_CAPS THEN
         CapsPressed()
     ELSEIF scancode == KEY_UP THEN
-        // cursor_y -= 1
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
-        HandleKeyDown(KEY_LEFT)
+        CursorMoveUp()
     ELSEIF scancode == KEY_DOWN THEN
-        // cursor_y += 1
+        CursorMoveDown()
     ELSEIF scancode == KEY_LEFT THEN
-        IF cursor THEN
-            cursor -= 1
-            redraw = TRUE
-        END
+        CursorMoveLeft()
     ELSEIF scancode == KEY_RIGHT THEN
-        IF cursor < PtLength(&table) THEN
-            cursor += 1
-            redraw = TRUE
-        END
+        CursorMoveRight()
     ELSEIF is_ctrl THEN
         HandleCtrlKeyDown(scancode)
     ELSEIF
@@ -509,7 +610,7 @@ FN Main (
             t2 := Millis()
             CopyMemoryBytes(view_buffer, view_buffer + width * height * 2, width * height * 2)
             t3 := Millis()
-            RtlPrint("%d %d %d\n", t1-t0, t2-t1, t3-t2)
+            // RtlPrint("%d %d %d\n", t1-t0, t2-t1, t3-t2)
             // PtDebug(&table)
         END
         YieldTask()

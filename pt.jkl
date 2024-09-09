@@ -90,14 +90,15 @@ FN PtSeek (
     RETURN i
 END
 
-// Given a piece index and byte offset within that piece, return the byte at that position.
+// Return the byte at a given byte index.
 FN PtAt (
     IN self : ^Pt,
-    IN piece_index : UWORD,
-    IN byte_offset : UWORD,
+    IN seek_to : UWORD,
 ) : UBYTE
-    start := &self^.Pieces.Elems[piece_index].Start
-    RETURN self^.Data.Elems[start + byte_offset]
+    offset : UWORD
+    piece := PtSeek(self, seek_to, OUT offset)
+    start := self^.Pieces.Elems[piece].Start
+    RETURN self^.Data.Elems[start + offset]
 END
 
 // Insert a new character at some byte offset.
