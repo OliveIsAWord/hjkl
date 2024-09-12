@@ -144,27 +144,21 @@ FN PtDelete (
 )
     offset : UWORD
     piece_index := PtSeek(self, position, OUT offset)
-    IF offset == 1 THEN
-        piece := &self^.Pieces.Elems[piece_index]
+    Assert(piece_index < self^.Pieces.Length, "deleting character outside text buffer", piece_index, offset)
+    piece := &self^.Pieces.Elems[piece_index]
+    IF piece^.Length == 1 THEN
+        VecPieceRemove(&self^.Pieces, piece_index)
+    ELSEIF offset == 0 THEN
         piece^.Start += 1
         piece^.Length -= 1
-        LEAVE
-    END
-    IF offset > 0 THEN
-        // Assert(0, "todo offset", piece_index, offset)
-        new_piece := VecPieceReserveAt(&self^.Pieces, piece_index + 1, 1)
-        piece := &self^.Pieces.Elems[piece_index]
-        new_piece^.Start = piece^.Start + offset
-        new_piece^.Length = piece^.Length - offset
-        piece^.Length = offset - 1
-        LEAVE
-    END
-    IF piece_index == 0 THEN LEAVE END
-    piece := &self^.Pieces.Elems[piece_index - 1]
-    IF piece^.Length > 1 THEN
+    ELSEIF offset == piece^.Length - 1 THEN
         piece^.Length -= 1
     ELSE
-        VecPieceRemove(&self^.Pieces, piece_index - 1)
+        new_piece := VecPieceReserveAt(&self^.Pieces, piece_index + 1, 1)
+        piece = &self^.Pieces.Elems[piece_index]
+        new_piece^.Start = piece^.Start + offset + 1
+        new_piece^.Length = piece^.Length - offset - 1
+        piece^.Length = offset
     END
 END
 
