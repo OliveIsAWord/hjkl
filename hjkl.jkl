@@ -130,6 +130,56 @@ FN Assert (
     END
 END
 
+// Render the current text buffer to view_buffer
+FN RenderViewBuffer ()
+    inner_offset : UWORD
+    i := PtSeek(&table, view_byte_offset, OUT inner_offset)
+    cursor_pos := cursor - view_byte_offset
+    x := 0
+    buffer_pos := 0
+    WHILE i < table.Pieces.Length AND buffer_pos < width * height DO
+        piece := &table.Pieces.Elems[i]
+        c := table.Data.Elems[piece^.Start + inner_offset]
+        meta := 2
+        IF cursor_pos == 0 THEN
+            meta |= 1
+        END
+        cursor_pos -= 1
+        IF c == '\n' THEN
+            WHILE x < width DO
+                view_buffer[buffer_pos * 2] = ' '
+                view_buffer[buffer_pos * 2 + 1] = meta
+                meta = 0
+                buffer_pos += 1
+                x += 1
+            END
+        ELSE
+            view_buffer[buffer_pos * 2] = c
+            view_buffer[buffer_pos * 2 + 1] = meta
+            buffer_pos += 1
+            x += 1
+        END
+        IF x >= width THEN
+            x = 0
+        END
+        inner_offset += 1
+        IF inner_offset >= piece^.Length THEN
+            inner_offset = 0
+            i += 1
+        END
+    END
+    meta := 4
+    IF cursor_pos == 0 THEN
+        meta |= 1
+    END
+    WHILE buffer_pos < width * height DO
+        view_buffer[buffer_pos * 2] = ' '
+        view_buffer[buffer_pos * 2 + 1] = meta
+        meta = 0
+        buffer_pos += 1
+    END
+END
+
 FN ParseFilePath (
     IN fp : ^UBYTE,
     IN loc : ^FileLocation,
@@ -303,6 +353,27 @@ FN HandleMouseClick (
         StartDraggingWindow(&window) // NOTE: This blocks *all* tasks, including ours, until the user releases the mouse click
         LEAVE
     END
+    // Clicking the fringes does nothing
+    IF x < 8 OR x >= (width + 1) * 8 THEN LEAVE END
+    // Otherwise, move the cursor to the mouse position
+    IF redraw THEN
+        RenderViewBuffer()
+    END
+    char_x := x / 8 - 1
+    char_y := y / 16 - 1
+    i := char_y * width + char_x
+    num_chars := 0
+    WHILE i DO
+        IF view_buffer[i * 2 + 1] & 6 THEN
+            num_chars += 1
+        END
+        i -= 1
+    END
+    new_cursor := view_byte_offset + num_chars
+    IF new_cursor != cursor THEN
+        cursor = new_cursor
+        redraw = TRUE
+    END
 END
 
 FN HandleMouseRelease (
@@ -401,56 +472,6 @@ FN HandleMenuClick (
 )
     Assert(menu == 0 AND item == 0, "invalid menu choice", menu, item)
     SaveFile()
-END
-
-// Render the current text buffer to view_buffer
-FN RenderViewBuffer ()
-    inner_offset : UWORD
-    i := PtSeek(&table, view_byte_offset, OUT inner_offset)
-    cursor_pos := cursor - view_byte_offset
-    x := 0
-    buffer_pos := 0
-    WHILE i < table.Pieces.Length AND buffer_pos < width * height DO
-        piece := &table.Pieces.Elems[i]
-        c := table.Data.Elems[piece^.Start + inner_offset]
-        is_cursor := 0
-        IF cursor_pos == 0 THEN
-            is_cursor = 1
-        END
-        cursor_pos -= 1
-        IF c == '\n' THEN
-            WHILE x < width DO
-                view_buffer[buffer_pos * 2] = ' '
-                view_buffer[buffer_pos * 2 + 1] = is_cursor
-                is_cursor = 0
-                buffer_pos += 1
-                x += 1
-            END
-        ELSE
-            view_buffer[buffer_pos * 2] = c
-            view_buffer[buffer_pos * 2 + 1] = is_cursor
-            buffer_pos += 1
-            x += 1
-        END
-        IF x >= width THEN
-            x = 0
-        END
-        inner_offset += 1
-        IF inner_offset >= piece^.Length THEN
-            inner_offset = 0
-            i += 1
-        END
-    END
-    is_cursor := 0
-    IF cursor_pos == 0 THEN
-        is_cursor = 1
-    END
-    WHILE buffer_pos < width * height DO
-        view_buffer[buffer_pos * 2] = ' '
-        view_buffer[buffer_pos * 2 + 1] = is_cursor
-        is_cursor = 0
-        buffer_pos += 1
-    END
 END
 
 FN DrawPixel (
@@ -647,6 +668,7 @@ FN Main (
                 CloseMenu(&menu_bar)
             ELSE
                 // We got a bad type. Ignore it?
+                RtlPrint("got unknown event %u\n", ev.Type)
             END
         END
         // Redraw the text buffer
