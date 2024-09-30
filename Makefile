@@ -3,7 +3,7 @@
 
 OUT = hjkl.fxf
 OUT_IMG = hjkl.img
-OBJECTS = hjkl.o os.o rom.o
+OBJECTS = src/hjkl.o src/os.o src/rom.o
 SOURCE = $(OBJECTS:.o=.jkl)
 
 $(OUT): $(OBJECTS)
@@ -22,7 +22,24 @@ $(OUT_IMG): $(OUT)
 run: $(OUT_IMG)
 	$(FOX32) --disk $(FOX32OS) --disk $(OUT_IMG)
 
+dogfood_build: $(OUT_IMG)
+	mkdir -p backup
+	cp -r src "backup/$$(date --rfc-3339=seconds)"
+	cd src && ls
+	for FILE in $$(ls src/*.jkl src/*.hjk); do \
+		$(RYFS) add $(OUT_IMG) $$FILE; \
+	done
+
+dogfood_export:
+	cd src && \
+	for FILE in $$(ls *.jkl *.hjk); do \
+		$(RYFS) export ../$(OUT_IMG) $$FILE; \
+	done
+
+dogfood: dogfood_build run dogfood_export
+
 clean:
 	rm -f $(OUT) $(OUT_IMG) $(OBJECTS)
 
-.PHONY: clean run
+.PHONY: clean run dogfood_build dogfood dogfood_export
+.NOTPARALLEL: dogfood
