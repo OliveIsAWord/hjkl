@@ -30,4 +30,4 @@ Hjkl is a non-modal editor, which means typing a character immediately inserts t
 
 # Building and Running
 
-Hjkl can be built with Make, requires variables `JACKAL` (Jackal compiler), `XRASM` (assembler), `XRLINK` (linker), and RTLLIB (statically linked library of Jackal's standard library), all from the [XR/station SDK](https://github.com/xrarch/newsdk). The `run` convenience recipe also requires variables `RYFS`, `FOX32`, and `FOX32OS`.
+Hjkl can be built with Make, requires variables `JACKAL` (Jackal compiler), `XRASM` (assembler), `XRLINK` (linker), and `RTLLIB` (object file of Jackal's standard library), all from the [XR/station SDK](https://github.com/xrarch/newsdk). The `run` convenience recipe also requires variables `RYFS`, `FOX32`, and `FOX32OS`.
