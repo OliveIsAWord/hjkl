@@ -1,0 +1,27 @@
+/// A collection of nice functions.
+
+/// Returns the number of milliseconds since boot, as provided by the fox32 hardware.
+EXTERN FN Millis () : UWORD
+#ASM [
+Millis:
+.global Millis
+    in a3, 0x80000706
+    ret
+]
+
+/// Trigger a breakpoint on fox32, delivering the user to the monitor. Note that fox32os includes a "recovery" option allowing control flow to return after calling this function.
+EXTERN FN Trap()
+#ASM [
+Trap:
+.global Trap
+    int 10000
+    ret
+]
+
+// This is defined in hjkl.jkl because it calls `Exit` which cleans up the application.
+EXTERN FN Assert (
+    IN condition : UBYTE,
+    IN label : ^UBYTE,
+    IN arg1 : UWORD,
+    IN arg2 : UWORD,
+)

@@ -1,14 +1,3 @@
-#INCLUDE "os.hjk"
-#INCLUDE "rom.hjk"
-#INCLUDE "rtl.hjk"
-
-EXTERN FN Assert (
-    IN condition : UBYTE,
-    IN label : ^UBYTE,
-    IN arg1 : UWORD,
-    IN arg2 : UWORD,
-)
-
 /// Given an inner type, generate a vector type and methods.
 #MACRO VecOf (
     T,

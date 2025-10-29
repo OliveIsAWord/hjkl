@@ -1,0 +1,16 @@
+/// A file including all source code to make building easier.
+
+// macro definitions to make the Rtl library happy
+#DEFINE BLD_BITS 32
+#DEFINE ARCHITECTURE "fox32"
+
+#INCLUDE "keys.hjk"
+#INCLUDE "rtl.hjk"
+#INCLUDE "rom.hjk"
+#INCLUDE "rom.jkl"
+#INCLUDE "os.hjk"
+#INCLUDE "os.jkl"
+#INCLUDE "util.jkl"
+#INCLUDE "vec.hjk"
+#INCLUDE "pt.jkl"
+#INCLUDE "hjkl.jkl"

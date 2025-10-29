@@ -1,8 +1,5 @@
 /// The piece table, the fundamental data structure we use for storing and editing text. It consists of two parts: an append-only list of characters `Data`, and a list of slices into these characters `Pieces`. When editing text, characters are added to `Data` if necessary and we insert, modify, or delete a piece. Operations are `O(c + n)`, where `c` is the number of characters the operation inserts and `n` is the length of `Pieces`. The theory is that, even when a very large file is opened, a user will only edit that file in a limited number of locations, meaning untouched parts of the file can be manipulated as large, singular pieces.
 
-#INCLUDE "vec.hjk"
-#INCLUDE "rtl.hjk"
-
 /// A span of text indexing into `Pt.Data`.
 STRUCT Piece
     /// The beginning index.

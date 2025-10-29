@@ -8,32 +8,6 @@
     call Main
 ]
 
-// macro definitions to make the Rtl library happy
-#DEFINE BLD_BITS 32
-#DEFINE ARCHITECTURE "fox32"
-
-#INCLUDE "rtl.hjk" // Printing functionality
-#INCLUDE "rom.hjk" // fox32os bindings
-#INCLUDE "os.hjk" // fox32rom bindings
-#INCLUDE "pt.jkl" // piece table implementation
-
-/// Returns the number of milliseconds since boot, as provided by the fox32 hardware.
-EXTERN FN Millis () : UWORD
-#ASM [
-Millis:
-.global Millis
-    in a3, 0x80000706
-    ret
-]
-
-/// Trigger a breakpoint on fox32, delivering the user to the monitor. Note that fox32os includes a "recovery" option allowing control flow to return after calling this function.
-EXTERN FN Trap()
-#ASM [
-Trap:
-.global Trap
-    int 10000
-    ret
-]
 
 /// A data table defining a menu bar in fox32os' required format.
 EXTERN menu_bar : Menu
@@ -288,6 +262,20 @@ FN LineStartOffset (
     RETURN offset
 END
 
+/// Returns the number of rows of text above the given position.
+FN PositionHeight (
+    IN position: UWORD
+) : UWORD
+    i := 0
+    WHILE i < position DO BREAK END
+    RETURN 0
+END
+
+/// If the cursor is outside the visible text buffer, adjust `view_cursor` to place the cursor at the middle of the screen.
+FN RecenterCursorIfOffscreen ()
+
+END
+
 /// Move the cursor backward by one character.
 FN CursorMoveLeft()
     IF cursor THEN
@@ -346,6 +334,7 @@ FN CursorMoveDown()
         cursor = next_line + next_line_len
         cursor_desired_offset = desired_x - next_line_len
     END
+    RecenterCursorIfOffscreen()
 END
 
 /// Move the cursor to the first character of the line, not respecting `line_mode_visual`.
