@@ -3,17 +3,14 @@
 
 OUT = hjkl.fxf
 OUT_IMG = hjkl.img
-OBJECTS = src/hjkl.o src/os.o src/rom.o
-SOURCE = $(OBJECTS:.o=.jkl)
+OBJECT = hjkl.o
+ASM = hjkl.asm
+SOURCE = src/build.jkl
 
-$(OUT): $(OBJECTS)
-	target=fox32 $(XRLINK) link $(OUT) $(OBJECTS) $(RTLLIB)
-
-.jkl.asm:
-	$(JACKAL) target=fox32 $< $@
-
-.asm.o:
-	$(XRASM) target=fox32 $< $@
+$(OUT): $(SOURCE)
+	$(JACKAL) target=fox32 $(SOURCE) $(ASM)
+	$(XRASM) target=fox32 $(ASM) $(OBJECT)
+	target=fox32 $(XRLINK) link $(OUT) $(OBJECT) $(RTLLIB)
 
 $(OUT_IMG): $(OUT)
 	$(RYFS) create $(OUT_IMG) -l Hjkl -s 0
@@ -39,7 +36,7 @@ dogfood_export:
 dogfood: dogfood_build run dogfood_export
 
 clean:
-	rm -f $(OUT) $(OUT_IMG) $(OBJECTS)
+	rm -f $(OUT) $(OUT_IMG) $(OBJECT) $(ASM)
 
 .PHONY: clean run dogfood_build dogfood dogfood_export
 .NOTPARALLEL: dogfood
