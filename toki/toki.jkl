@@ -1,0 +1,165 @@
+/// An invisible buffer containing the currently typed text for the current buffer.
+toki_buffer : VecUbyte
+
+/// `toki` specific initialization code.
+FN TokiInit ()
+    VecUbyteNull(&toki_buffer)
+END
+
+/// Exit toki pona input.
+FN TokiReset ()
+    IF toki_buffer.Length THEN
+        TokiInsertBufferContents(TOKI_INSERT_ASCII)
+    END
+END
+
+/// Find the glyph of the (lexicographically) first toki pona word matching the buffer, or NUL if none is found. Matching a word means that the buffer's text is a prefix of that word. For example, the buffer "kal" would match the words "kala" and "kalama" but not "kama". Since "kala" is lexicographically first, its index will be returned.
+FN TokiFindVocab () : UBYTE
+    i := 0
+    WHILE TRUE DO
+        word := toki_dict_words[i]
+        // Reached the end of the dictionary, no word matches.
+        IF NOT word THEN RETURN 0 END
+        // Otherwise, lexicographically compare the buffer to the current word.
+        ci := 0
+        matches := TRUE
+        WHILE ci < toki_buffer.Length DO
+            cmp := CAST toki_buffer.Elems[ci] TO WORD - CAST word[ci] TO WORD
+            // The buffer's text compares greater than the word. Therefore, if a matching word exists, it must be further ahead in the list (which is in sorted order).
+            // If `word[ci]` is NUL, this branch is always taken because `toki_buffer` will never contain a NUL byte. We implicitly rely on this to avoid out-of-bounds pointer access of `word`.
+            IF cmp > 0 THEN
+                matches = FALSE
+                BREAK
+            // The buffer's text compares less than the word. Since no previous word has matched either, then no matching word exists in the dictionary.
+            ELSEIF cmp < 0 THEN RETURN 0 END
+            // Otherwise, the current character is equal to that of the word, and we try the next letter or exit the loop.
+            ci += 1
+        END
+        IF matches THEN
+            // We found the matching word! Return its character code.
+            RETURN toki_dict_encodings[i]
+        END
+        i += 1
+    END
+END
+
+/// Changes the glyph or adds a glyph under the cursor to reflect the current `toki_buffer` contents.
+FN TokiUpdateFromBuffer (
+    /// Should we add a new character to the text?
+    IN is_new_character : UBYTE,
+)
+    c := TokiFindVocab()
+    IF c == 0 THEN
+        c = toki_buffer.Elems[toki_buffer.Length - 1]
+    END
+    IF NOT is_new_character THEN
+        DeleteCharAtCursor()
+    END
+    InsertCharAtCursor(c)
+END
+
+FN TokiInsertBufferContents (
+    IN behavior : TokiInsertBehavior,
+)
+    IF NOT toki_buffer.Length THEN LEAVE END
+    DeleteCharAtCursor()
+    matching_glyph := 0
+    IF behavior != TOKI_INSERT_ASCII THEN
+        matching_glyph = TokiFindVocab()
+        IF behavior == TOKI_INSERT_ALTERNATE THEN
+            matching_glyph = TokiAlternate(matching_glyph)
+        END
+    END
+    //RtlPrint("==== UWU %d %d\n", matching_glyph, toki_buffer.Length)
+    IF matching_glyph THEN
+        InsertCharAtCursor(matching_glyph)
+        cursor += 1
+    ELSE
+        i := 0
+        WHILE i < toki_buffer.Length DO
+            InsertCharAtCursor(toki_buffer.Elems[i])
+            cursor += 1
+            i += 1
+        END
+    END
+    toki_buffer.Length = 0
+END
+
+/// Handle a keypress in toki input mode.
+FN TokiInput (
+    IN scancode : UBYTE,
+)
+    c := 0
+    IF IsTypeableScancode(scancode) THEN
+        c = ScancodeToAscii(scancode)
+    END
+    //RtlPrint("Toki! %d %d\n", scancode, c)
+    // Given a valid (lowercase) toki pona character, add it to the buffer.
+    IF TokiIsValidChar(c) THEN
+        is_new_character := toki_buffer.Length == 0
+        VecUbyteReserveOne(&toki_buffer)^ = c
+        TokiUpdateFromBuffer(is_new_character)
+        LEAVE
+    // Otherwise, if there's something in the buffer, we clear it and possibly output its contents.
+    ELSEIF toki_buffer.Length THEN
+        // *Unless* it's Escape, in which case we clear the text.
+        IF scancode == KEY_ESCAPE THEN
+            DeleteCharAtCursor()
+            toki_buffer.Length = 0
+            LEAVE
+        END
+        // On Space or Tab, output the buffer contents. On Tilde, output an alternate glyph if possible. On Enter, just output the plaintext.
+        is_enter := scancode == KEY_ENTER
+        is_tilde := scancode == KEY_BACKTICK
+        is_tab := scancode == KEY_TAB
+        insert_mode: TokiInsertBehavior = TOKI_INSERT_NORMAL
+        IF is_tilde THEN insert_mode = TOKI_INSERT_ALTERNATE
+        ELSEIF is_enter THEN insert_mode = TOKI_INSERT_ASCII
+        // This is definitely a weird place to put this code. If the key is not a character, then completely ignore it.
+        ELSEIF NOT is_tab AND c == 0 THEN LEAVE END
+        TokiInsertBufferContents(insert_mode)
+        // Then, exit early so that a literal whitespace or tilde character is not outputted as well.
+        IF is_enter OR is_tilde OR is_tab OR scancode == KEY_SPACE THEN
+            LEAVE
+        END
+    END
+    IF c == 0 THEN LEAVE END
+    c = TokiGetPunct(c)
+    InsertCharAtCursor(c)
+    cursor += 1
+END
+
+/// Handle a backspace press in toki input mode. Returns FALSE if the backspace does not do anything (and therefor the outer code must delete a character as normal).
+FN TokiBackspace () : UBYTE
+    IF NOT toki_buffer.Length THEN RETURN FALSE END
+    toki_buffer.Length -= 1
+    IF toki_buffer.Length THEN
+        TokiUpdateFromBuffer(FALSE)
+    ELSE
+        DeleteCharAtCursor()
+    END
+    RETURN TRUE
+END
+
+/// Render a "sitelen pona" toki pona glyph.
+FN DrawTokiTile (
+    IN c : UBYTE,
+    IN x : UINT,
+    IN y : UINT,
+    IN fg_color : ULONG,
+    IN bg_color : ULONG,
+)
+    tile_index := TokiEncodingToTileIndex(c) & 255
+    iy := 0
+    WHILE iy < 16 DO
+        ix := 0
+        row_byte := toki_glyphs[tile_index * 16 + iy]
+        WHILE ix < 8 DO
+            color := bg_color
+            IF row_byte & (1 << ix) THEN color = fg_color END
+            DrawPixel(x + ix, y + iy, color)
+            ix += 1
+        END
+        iy += 1
+    END
+END

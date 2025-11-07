@@ -1,0 +1,7 @@
+EXTERN toki_glyphs : UBYTE[]
+#ASM [
+toki_glyphs:
+    .incbin "toki/gen/glyphs.bin"
+]
+#INCLUDE "gen/toki_pona_data.jkl"
+#INCLUDE "toki.jkl"

@@ -14,4 +14,6 @@
 #INCLUDE "util.jkl"
 #INCLUDE "vec.hjk"
 #INCLUDE "pt.jkl"
+#INCLUDE "../toki/toki.hjk"
 #INCLUDE "hjkl.jkl"
+#INCLUDE "../toki/build.jkl"

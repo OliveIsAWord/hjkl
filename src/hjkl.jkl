@@ -70,6 +70,9 @@ view_buffer : ^UBYTE = NULLPTR
 /// Flag for if the user is currently holding the Ctrl key.
 is_ctrl : UBYTE = FALSE
 
+/// Flag for using the toki pona IME instead of normal text input
+is_toki : UBYTE = FALSE
+
 /// A set of ABGR colors for the foreground (text), background, and gutters.
 color_fg : ULONG = 0xFF3E3E3E
 color_bg : ULONG = 0xFFC1E7F6
@@ -406,6 +409,22 @@ FN RecenterCursorIfOffscreen ()
     END
 END
 
+/// Delete the character the cursor is pointing to.
+FN DeleteCharAtCursor ()
+    IF cursor >= PtLength(&table) THEN LEAVE END
+    PtDelete(&table, cursor)
+    redraw = TRUE
+END
+
+/// Insert a character where the cursor is pointing.
+FN InsertCharAtCursor (
+    IN c : UBYTE,
+)
+    PtInsert(&table, cursor, c)
+    redraw = TRUE
+    cursor_desired_offset = 0
+END
+
 /// Respond to a mouse press from the user at a given position relative to the window.
 FN HandleMousePress (
     IN x : UINT,
@@ -447,6 +466,17 @@ FN HandleMouseRelease (
 )
 END
 
+FN IsTypeableScancode (
+    IN scancode : UBYTE,
+) : UBYTE
+    // TODO: Support keypad?
+    RETURN 0x02 <= scancode AND scancode <= 0x0D
+    OR 0x10 <= scancode AND scancode <= 0x1C // notably, we include the Enter key in this range
+    OR 0x1E <= scancode AND scancode <= 0x29
+    OR 0x2B <= scancode AND scancode <= 0x35
+    OR scancode == 0x39
+END
+
 FN HandleCtrlKeyDown (
     IN scancode : UBYTE,
 )
@@ -467,15 +497,19 @@ FN HandleCtrlKeyDown (
     ELSEIF scancode == KEY_E THEN
         CursorMoveLineEnd()
     ELSEIF scancode == KEY_D THEN
-        IF cursor < PtLength(&table) THEN
-            PtDelete(&table, cursor)
-            redraw = TRUE
-        END
+        DeleteCharAtCursor()
         cursor_desired_offset = 0
     ELSEIF scancode == KEY_U THEN
         ScrollUp((height + 1) / 2)
     ELSEIF scancode == KEY_V THEN
         ScrollDown((height + 1) / 2)
+    ELSEIF scancode == KEY_BACKTICK THEN
+        is_toki = NOT is_toki
+        //RtlPrint("is_toki %d\n", is_toki)
+        IF is_toki THEN
+        ELSE
+            TokiReset()
+        END
     END
 END
 
@@ -484,12 +518,14 @@ FN HandleKeyDown (
     IN scancode : UBYTE,
 )
     IF scancode == KEY_BACKSPACE THEN
+        cursor_desired_offset = 0
+        IF is_toki THEN
+            IF TokiBackspace() THEN LEAVE END
+        END
         IF cursor THEN
             cursor -= 1
-            PtDelete(&table, cursor)
-            redraw = TRUE
+            DeleteCharAtCursor()
         END
-        cursor_desired_offset = 0
     ELSEIF scancode == KEY_CTRL THEN
         is_ctrl = TRUE
     ELSEIF scancode == KEY_LSHIFT OR scancode == KEY_RSHIFT THEN
@@ -506,19 +542,13 @@ FN HandleKeyDown (
         CursorMoveRight()
     ELSEIF is_ctrl THEN
         HandleCtrlKeyDown(scancode)
-    ELSEIF
-        // TODO: Support keypad?
-        0x02 <= scancode AND scancode <= 0x0D
-     OR 0x10 <= scancode AND scancode <= 0x1C // notably, we include the Enter key in this range
-     OR 0x1E <= scancode AND scancode <= 0x29
-     OR 0x2B <= scancode AND scancode <= 0x35
-     OR scancode == 0x39
-    THEN
-        c := ScancodeToAscii(scancode) // this is affected by ShiftPressed(), etc.
-        PtInsert(&table, cursor, c)
-        cursor += 1
-        redraw = TRUE
+    ELSEIF is_toki THEN
         cursor_desired_offset = 0
+        TokiInput(scancode)
+    ELSEIF IsTypeableScancode(scancode) THEN
+        c := ScancodeToAscii(scancode) // this is affected by ShiftPressed(), etc.
+        InsertCharAtCursor(c)
+        cursor += 1
     END
 END
 
@@ -641,6 +671,8 @@ FN DisplayViewBuffer ()
             END
             IF 0x20 <= char AND char <= 0x7E THEN
                 DrawFontTileToOverlay(char, display_x, display_y, color1, color2, window.Overlay)
+            ELSEIF TokiEncodingToTileIndex(char) != 255 THEN
+                DrawTokiTile(char, display_x, display_y, color1, color2)
             ELSE
                 DrawReplacementTile(char, display_x, display_y, color1, color2)
             END
@@ -658,6 +690,7 @@ FN PreMain (
     file_loc.Path = NULLPTR
     window.FrameBuffer = NULLPTR
     PtNull(&table)
+    TokiInit()
 END
 
 /// The entry point for our application.
@@ -744,6 +777,19 @@ FN Main (
                 RtlPrint("got unknown event %u\n", ev.Type)
             END
             IF cursor != last_cursor THEN
+                // Clear `toki_buffer` if moving cursor
+                IF is_toki THEN
+                    old_length := PtLength(&table)
+                    new_cursor := cursor
+                    cursor = last_cursor
+                    TokiInsertBufferContents(TOKI_INSERT_NORMAL)
+                    cursor = new_cursor
+                    new_length := PtLength(&table)
+                    Assert(old_length <= new_length, "text buffer length shorter when switching to normal text input", old_length, new_length)
+                    IF new_cursor > last_cursor THEN
+                        cursor += new_length - old_length
+                    END
+                END
                 RecenterCursorIfOffscreen()
             END
         END

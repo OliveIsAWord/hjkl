@@ -6,7 +6,7 @@ OUT_IMG = hjkl.img
 OBJECT = hjkl.o
 ASM = hjkl.asm
 SOURCE = src/build.jkl
-ALL_SOURCES = src/*.jkl
+ALL_SOURCES = src/*.jkl toki/*
 
 $(OUT): $(SOURCE) $(ALL_SOURCES)
 	$(JACKAL) target=fox32 $(SOURCE) $(ASM)
@@ -18,10 +18,11 @@ $(OUT_IMG): $(OUT)
 	$(RYFS) add $(OUT_IMG) $(OUT)
 
 run: $(OUT_IMG)
-	$(FOX32) --disk $(FOX32OS) --disk $(OUT_IMG)
+	$(FOX32) --disk $(FOX32OS) --disk $(OUT_IMG) --scale 2
 
 dry_dogfood_build: $(OUT_IMG)
 	$(RYFS) add $(OUT_IMG) src/hjkl.jkl
+	$(RYFS) add $(OUT_IMG) toki/gen/example.txt
 
 dry_dogfood: dry_dogfood_build run
 

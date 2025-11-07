@@ -1,0 +1,34 @@
+EXTERN FN TokiEncodingToTileIndex (
+    IN encoding : UBYTE,
+) : UBYTE
+
+EXTERN FN TokiInit ()
+
+EXTERN FN TokiReset ()
+
+EXTERN FN DrawTokiTile (
+    IN c : UBYTE,
+    IN x : UINT,
+    IN y : UINT,
+    IN fg_color : ULONG,
+    IN bg_color : ULONG,
+)
+
+EXTERN FN TokiInput (
+    IN scancode : UBYTE,
+)
+
+ENUM TokiInsertBehavior : UBYTE
+    /// Insert the matching toki pona character if one exists, otherwise insert the plaintext.
+    TOKI_INSERT_NORMAL,
+    /// Insert the alternate drawing of the matching toki pona character if one exists, otherwise act like TOKI_INSERT_NORMAL.
+    TOKI_INSERT_ALTERNATE,
+    /// Always insert the plaintext.
+    TOKI_INSERT_ASCII,
+END
+
+EXTERN FN TokiInsertBufferContents (
+    IN behavior : TokiInsertBehavior,
+)
+
+EXTERN FN TokiBackspace () : UBYTE
