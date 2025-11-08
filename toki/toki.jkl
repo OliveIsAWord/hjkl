@@ -163,3 +163,37 @@ FN DrawTokiTile (
         iy += 1
     END
 END
+
+/// Fill in the sitelen pona cartouche lines. We naively extend these lines starting from both opening and closing cartouche characters until reaching the nearesst opposite character. This allows the render to look consistent even if one of the cartouches is offscreen, without having to reason about characters outside the view buffer.
+FN CalculateSitelenPonaLines ()
+    // Opening cartouches:
+    IF TRUE THEN
+        fill := FALSE
+        i := 0
+        WHILE i < width * height DO
+            IF view_buffer[i * 2] == TOKI_CARTOUCHE_CLOSE THEN
+                fill = FALSE
+            ELSEIF fill THEN
+                view_buffer[i * 2 + 1] |= 0x18
+            ELSEIF view_buffer[i * 2] == TOKI_CARTOUCHE_OPEN THEN
+                fill = TRUE
+            END
+            i += 1
+        END
+    END
+    // Closing cartouches:
+    IF TRUE THEN
+        fill := FALSE
+        i := width * height
+        WHILE i > 0 DO
+            i -= 1
+            IF view_buffer[i * 2] == TOKI_CARTOUCHE_OPEN THEN
+                fill = FALSE
+            ELSEIF fill THEN
+                view_buffer[i * 2 + 1] |= 0x18
+            ELSEIF view_buffer[i * 2] == TOKI_CARTOUCHE_CLOSE THEN
+                fill = TRUE
+            END
+        END
+    END
+END

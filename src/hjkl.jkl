@@ -64,7 +64,7 @@ height : UBYTE = 20
 /// A flag that is set whenever the text buffer needs to be redrawn.
 redraw : UBYTE = TRUE
 
-/// Two contiguous 2D arrays representing the visible portion of the text buffer, whose bounds are `width` and `height`. Each array is a left-to-right, top-to-bottom sequence of character byte + control byte pairs. The control byte is a bitflag: 0x1 signals this character is selected by the cursor, 0x2 signals this is a character, 0x4 signals this is the position of the end of the file. The first array is the current text buffer, the next array is the previous text buffer. This means `view_buffer` has a total length of `width * height * 4` bytes. Storing both allows the renderer to only render characters that changed. When the screen is redrawn, the first array is copied to the second.
+/// Two contiguous 2D arrays representing the visible portion of the text buffer, whose bounds are `width` and `height`. Each array is a left-to-right, top-to-bottom sequence of character byte + control byte pairs. The control byte is a bitflag: 0x1 signals this character is selected by the cursor, 0x2 signals this is a character, 0x4 signals this is the position of the end of the file, 0x8 signals the top row of pixels should be filled in, 0x10 signals the same for the bottom row (for toki pona's cartouches and extended "pi" if we ever add that). The first array is the current text buffer, the next array is the previous text buffer. This means `view_buffer` has a total length of `width * height * 4` bytes. Storing both allows the renderer to only render characters that changed. When the screen is redrawn, the first array is copied to the second.
 view_buffer : ^UBYTE = NULLPTR
 
 /// Flag for if the user is currently holding the Ctrl key.
@@ -196,6 +196,7 @@ FN RenderViewBuffer ()
         meta = 0
         buffer_pos += 1
     END
+    CalculateSitelenPonaLines()
 END
 
 /// Read a fox32os file path into the `FileLocation` object. If the path begins with a disk ID, e.g. "0:hello.txt", that disk ID is written to the file path object. Otherwise, the disk ID is unchanged.
@@ -675,6 +676,22 @@ FN DisplayViewBuffer ()
                 DrawTokiTile(char, display_x, display_y, color1, color2)
             ELSE
                 DrawReplacementTile(char, display_x, display_y, color1, color2)
+            END
+            // Draw top cartouche line
+            IF meta & 0x8 THEN
+                line_x := 0
+                WHILE line_x < 8 DO
+                    DrawPixel(display_x + line_x, display_y + 2, color1)
+                    line_x += 1
+                END
+            END
+            // Draw bottom cartouche line
+            IF meta & 0x10 THEN
+                line_x := 0
+                WHILE line_x < 8 DO
+                    DrawPixel(display_x + line_x, display_y + 15, color1)
+                    line_x += 1
+                END
             END
             x += 1
         END

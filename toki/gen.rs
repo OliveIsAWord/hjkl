@@ -13,7 +13,7 @@ const GLYPHS_FP: &str = "sitelen pona.aseprite";
 const VOCAB_FP: &str = "vocab.txt";
 const GLYPHS_BIN_FP: &str = "gen/glyphs.bin";
 const JACKAL_CODE_FP: &str = "gen/toki_pona_data.jkl";
-const EXAMPLE_FP: &str = "gen/example.txt";
+const EXAMPLE_FP: &str = "gen/allbytes.txt";
 
 fn main() {
     let mut p = std::path::Path::new(&std::env::args().nth(0).unwrap())
@@ -158,7 +158,7 @@ fn create_data_table() {
         );
         if let Some(punct) = word.strip_prefix(":") {
             let key = punct.chars().next().unwrap();
-            let mut punct_name = punct[1..].to_owned();
+            let mut punct_name = format!("TOKI_{}", &punct[1..]);
             punct_name.make_ascii_uppercase();
             punctuation.insert(encoding, (key, punct_name));
         } else if let Some(alternate) = word.strip_prefix("+") {
@@ -228,15 +228,20 @@ fn create_data_table() {
         }
         write!(jackal_code, "    RETURN c\nEND\n\n")?;
 
+        for (encoding, (_, punct_name)) in &punctuation {
+            writeln!(jackal_code, "#DEFINE {punct_name} {encoding}")?;
+        }
+        writeln!(jackal_code)?;
+
         writeln!(
             jackal_code,
             "FN TokiGetPunct (\n    IN c : UBYTE,\n) : UBYTE"
         )?;
-        for (i, (encoding, (key, punct_name))) in punctuation.iter().enumerate() {
+        for (i, (key, punct_name)) in punctuation.values().enumerate() {
             let if_kw = if i == 0 { "IF" } else { "ELSEIF" };
             writeln!(
                 jackal_code,
-                "    {if_kw} c == {key:?} THEN RETURN {encoding} // {punct_name}"
+                "    {if_kw} c == {key:?} THEN RETURN {punct_name}"
             )?;
         }
         writeln!(jackal_code, "    ELSE RETURN c END\nEND\n\n")?;

@@ -14,6 +14,8 @@ EXTERN FN DrawTokiTile (
     IN bg_color : ULONG,
 )
 
+EXTERN FN CalculateSitelenPonaLines ()
+
 EXTERN FN TokiInput (
     IN scancode : UBYTE,
 )

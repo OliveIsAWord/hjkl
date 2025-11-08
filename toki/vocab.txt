@@ -151,8 +151,8 @@ tokipona
 
 
 
-:[cartouche open
-:]cartouche close
-:_pi extended
+:[cartouche_open
+:]cartouche_close
+:_pi_extended
 :.dot
 ::colon

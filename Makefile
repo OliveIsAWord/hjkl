@@ -18,11 +18,12 @@ $(OUT_IMG): $(OUT)
 	$(RYFS) add $(OUT_IMG) $(OUT)
 
 run: $(OUT_IMG)
-	$(FOX32) --disk $(FOX32OS) --disk $(OUT_IMG) --scale 2
+	$(FOX32) --disk $(FOX32OS) --disk $(OUT_IMG)
 
 dry_dogfood_build: $(OUT_IMG)
 	$(RYFS) add $(OUT_IMG) src/hjkl.jkl
-	$(RYFS) add $(OUT_IMG) toki/gen/example.txt
+	$(RYFS) add $(OUT_IMG) toki/gen/allbytes.txt
+	$(RYFS) add $(OUT_IMG) toki/example.txt
 
 dry_dogfood: dry_dogfood_build run
 
