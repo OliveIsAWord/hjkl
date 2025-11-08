@@ -1,41 +1,33 @@
-# Hjkl
+# Hjkl: pali tu pi suno sama
 
-A humble text editor for [fox32os](https://github.com/fox32-arch/fox32os) written in Jackal.
+A branch dedicated to editing toki pona's sitelen pona script seamlessly with latin script.
 
-![Screenshot of Hjkl](screenshot.png)
+![Screenshot of Hjkl with toki pona text](toki/screenshot.png)
 
-# Tutorial
+# toki pona Input Method
 
-Hjkl can be invoked in the shell, like so:
+A new command `C-<backtick>` allows switching between regular typing and toki pona typing.
 
-```
-0> 1:hjkl 0:startup.bat
-```
+When typing toki pona...
 
-The `N:` syntax specifies the disk ID of the file or application, and can be elided if it is in the currently selected disk.
+- Typing one of lowercase `aeijklmnopstuw` (all toki pona letters) adds that character to an invisible buffer, which is matched to the first possible toki pona word. The current word is reflected by the character under the cursor. If no word matches, then the last typed letter is shown instead.
+- Typing `Backspace` will delete the last character from the buffer. If the buffer is empty, it will delete a character at the cursor as normal.
+- Typing `Esc` will clear this buffer.
+- Typing `Space` or `Tab` will "publish" the current word in the buffer, writing it to the text file and allowing further words to be written. If there is no matching word, then the plaintext letters are written instead. Pressing `Space` while the buffer is empty will insert a space as normal.
+- Typing a backtick or tilde will behave the same, except it will use the alternate writing of the word if one exists. Currently supported alternate glyphs are the four-legged "akesi", the secular "sewi", and the numeric "mute".
+- Typing `Enter` will behave the same, except it will always write the plaintext.
+- Typing any other character publishes the current word and then types that character after it as normal.
 
-Hjkl is a non-modal editor, which means typing a character immediately inserts that character at the cursor, and other commands require special keys or keybinds to perform. We use `C-p` to represent holding the Ctrl key while pressing the P key.
+Some keys are remapped to different characters:
 
-- `C-p` or `Up`: move cursor up
-- `C-n` or `Down`: move cursor down
-- `C-f` or `Right`: move cursor right
-- `C-b` or `Left`: move cursor left
-- `C-a`: move cursor to start of line
-- `C-e`: move cursor to end of line
-- `C-u`: scroll up
-- `C-v`: scroll down
-- `Backspace`: delete character before cursor
-- `C-d`: delete character at cursor
-- `C-s`: save file
-- `C-c`: quit
+- The `[` and `]` keys now type cartouche characters, oval shapes which extend across characters and allow writing foreign words in toki pona.
+- The `.` key now types a middle dot.
+- The `:` key now types a thicker colon matching the middle dot character.
 
-# Building and Running
+As an example, typing "mi jan[ol:]" will give you the characters: "mi", "jan", opening cartouche, "olin", thick colon, closing cartouche.
 
-Hjkl can be built with Make, requires variables `JACKAL` (Jackal compiler), `XRASM` (assembler), `XRLINK` (linker), and `RTLLIB` (object file of Jackal's standard library), all from the [XR/station SDK](https://github.com/xrarch/newsdk). The `run` convenience recipe also requires variables `RYFS`, `FOX32`, and `FOX32OS`.
+Hjkl does not support combining glyphs. The one exception is the combination of "toki" and "pona", which is available as a special character written as "tokipona".
 
-I personally just use a shell script to fill these in for me:
+# Technical Design
 
-```sh
-#/bin/sh
-make run JACKAL=../../newsdk/bin/jkl.exe XRASM=../../newsdk/bin/xrasm.exe XRLINK=../../newsdk/bin/xrlink.exe RTLLIB=../../newsdk/Rtl/build/fox32/Rtl.lib RYFS=../../ryfs/ryfs.py FOX32=../../vm/fox32 FOX32OS=../../os/fox32os.img
-```
+Because Hjkl currently assumes one byte equals one character, we have to use the upper 128 bytes that ASCII doesn't use. This gives us enough to represent all the nimi pu, punctuation, plus a couple extra. We also use the control characters besides NUL, line break, and DEL. We can probably use NUL and DEL if need be. A good text editor would user the UCSUR encodings instead.
