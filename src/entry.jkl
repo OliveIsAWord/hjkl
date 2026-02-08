@@ -1,5 +1,22 @@
-/// The entry point of the program. This passes the input/output file and the first 3 command line arguments from the stack (where fox32os puts them) into registers (where the Jackal calling convention expects them). The fifth parameter, the fourth command line argument, remains on the stack. Then the Main function is called, which must not return.
 #ASM [
+    /// APP header used by fox32os to determine the application details and entry point.
+    .ds "APP" .db 0
+    .dp _gui_entry
+    .dp app_name
+    .dp app_desc
+    .dp app_author
+    .dp app_version
+    .dl 0 // no icon
+
+app_name: .ds "Hjkl" .db 0
+app_desc: .ds "Non-Modal Text Editor" .db 0
+app_author: .ds "OliveIsAWord (github.com/OliveIsAWord/hjkl)" .db 0
+app_version: .ds "0.1.1" .db 0
+
+app_entry:
+.global app_entry
+    /// The entry point of the program. This passes the input/output file and the first 3 command line arguments from the stack (where fox32os puts them) into registers (where the Jackal calling convention expects them). The fifth parameter, the fourth command line argument, remains on the stack. Then the Main function is called, which must not return.
+    inc rsp, 4 // ignore return address from app_entry call
     pop a0 // streamPtr
     pop a1 // arg0
     pop a2 // arg1

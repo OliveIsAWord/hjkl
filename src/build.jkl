@@ -5,6 +5,7 @@
 #DEFINE ARCHITECTURE "fox32"
 
 #INCLUDE "entry.jkl" // Important for this to be at the start of the binary
+#INCLUDE "gui_entry.jkl"
 #INCLUDE "keys.hjk"
 #INCLUDE "rtl.hjk"
 #INCLUDE "rom.hjk"

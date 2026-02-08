@@ -118,6 +118,7 @@ small_digits : UINT[16] = {
 }
 
 /// Gracefully exit the program, cleaning up any resource as necessary.
+EXTERN FN AppExit()
 FN Exit ()
     IF window.FrameBuffer THEN
         DestroyWindow(&window)
@@ -129,7 +130,7 @@ FN Exit ()
         FreeMemory(window_title)
     END
     PtFree(&table)
-    EndCurrentTask()
+    AppExit()
 END
 
 /// Assure that a given condition is true, or otherwise printing an error message and exiting.
